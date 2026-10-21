@@ -50,6 +50,28 @@ def recv_exact(sock, size):
         data.extend(block)
     return bytes(data)
 
+class DirectTCPTransport(StreamTransport):
+    """MeshCoMod's native framed TCP, deliberately separate from LRXB auth.
+
+    This is plaintext trusted-LAN transport. The radio must include the LRX
+    extension; unmodified MeshCoMod cannot supply Aquarium snapshots.
+    """
+    direct_radio = True
+    def __init__(self, host, port, client_id='loragotchi-aquarium'):
+        super().__init__()
+        self.client_id = client_id
+        self.socket = socket.create_connection((host, port), timeout=3)
+        self.socket.settimeout(.1)
+    def read(self):
+        try:
+            data = self.socket.recv(1024)
+            if not data: raise ConnectionError("Radio disconnected")
+            return data
+        except socket.timeout: return b""
+    def write(self, data): self.socket.sendall(data)
+    def close(self): self.socket.close()
+
+
 class TCPTransport(StreamTransport):
     def __init__(self, host, port, token=None):
         super().__init__()
@@ -132,10 +154,13 @@ class BLETransport:
             if not self.thread.is_alive():self.loop.close()
 
 
-def open_transport(uri,token=None,cancel=None):
+def open_transport(uri,token=None,cancel=None,client_id="loragotchi-aquarium"):
     if uri.startswith("serial:"):return SerialTransport(uri[7:])
     if uri.startswith("ble:"):return BLETransport(uri[4:],cancel)
     if uri.startswith("tcp:"):
         host,port=uri[4:].rsplit(":",1)
         return TCPTransport(host.strip('[]'),int(port),token)
-    raise ValueError("Connection must be serial:PORT, ble:ADDRESS or tcp:HOST:PORT")
+    if uri.startswith("meshcore:"):
+        host,port=uri[9:].rsplit(":",1)
+        return DirectTCPTransport(host.strip('[]'),int(port),client_id)
+    raise ValueError("Connection must be serial:PORT, ble:ADDRESS, tcp:HOST:PORT or meshcore:HOST:PORT")

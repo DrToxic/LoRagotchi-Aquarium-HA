@@ -25,12 +25,12 @@ from .transitions import FishTransitions
 
 class Aquarium(ShowBase):
     def __init__(self,args):
-        self.args=args;self.settings=Settings.load(args.settings)
+        self.args=args;self.streaming=getattr(args,"stream_layout",False);self.settings=Settings.load(args.settings)
         self.display_path=Path(args.settings).with_name('display-layout.json')
         self.display=DisplayProfile.load(self.display_path)
-        self.restore_rectangles=self.display.windows if args.wall_columns is None else []
+        self.restore_rectangles=self.display.windows if args.wall_columns is None and not self.streaming else []
         if self.restore_rectangles:args.width,args.height=self.restore_rectangles[0][2:]
-        self.start_windows=args.wall_columns or len(self.restore_rectangles) or 1
+        self.start_windows=1 if self.streaming else args.wall_columns or len(self.restore_rectangles) or 1
         if args.preset:self.settings.apply(args.preset)
         if args.render_scale is not None:self.settings.scale=args.render_scale
         for field in ("detail","plants","bubbles","fps"):
@@ -40,6 +40,7 @@ class Aquarium(ShowBase):
         if args.no_caustics:self.settings.caustics=False
         if args.no_vsync:self.settings.vsync=False
         loadPrcFileData("tank",f"window-title LoRagotchi Aquarium — Controls\nwin-size 456 748\nwin-origin 32 32\nundecorated false\nfullscreen false\nsync-video {str(self.settings.vsync).lower()}\naudio-library-name null\nframebuffer-multisample 0\ntextures-power-2 none\nnotify-level warning\n")
+        if self.streaming:loadPrcFileData("stream",f"win-origin {args.width+16} 0\nundecorated true\n")
         configure_text()
         super().__init__();self.disableMouse();self.setBackgroundColor(.012,.075,.115,1)
         self.sim=Simulation();self.models={};self.roster=[];self.inbox=[];self.status="Starting aquarium…"
@@ -79,7 +80,8 @@ class Aquarium(ShowBase):
         gsg=(self.aquarium_window or self.win).getGsg()
         print(f"Renderer: {gsg.getDriverVendor()} / {gsg.getDriverRenderer()} / {gsg.getDriverVersion()}",flush=True)
         print(f"Controls window + {len(self.views)} aquarium view(s); internal {self.internal_size}",flush=True)
-        print("Aquarium: drag anywhere to move; drag edges to resize; Tab controls; F fullscreen; N names; V add view; Esc close view",flush=True)
+        if self.streaming:print("Hosted aquarium: fixed single view; browser fullscreen available",flush=True)
+        else:print("Aquarium: drag anywhere to move; drag edges to resize; Tab controls; F fullscreen; N names; V add view; Esc close view",flush=True)
 
     @property
     def aquarium_window(self):
@@ -151,6 +153,9 @@ class Aquarium(ShowBase):
         finally:self._configuring_output=False
 
     def add_window(self, rectangle=None):
+        if self.streaming:
+            if self.views:return
+            rectangle=(0,0,self.args.width,self.args.height)
         if len(self.views)>=MAX_WINDOWS:
             self.status=f"Maximum {MAX_WINDOWS} aquarium windows";return
         view_id=self._next_view_id;self._next_view_id+=1
@@ -183,6 +188,7 @@ class Aquarium(ShowBase):
             ('escape',self.close_view,[view]),('arrow_right',self.select_next,[]),
             ('tab',self.show_controls,[]),('mouse1',self.window_drag.begin,[view]),
             ('mouse1-up',self.window_drag.finish,[view])):
+            if self.streaming and key in ("mouse1","mouse1-up"):continue
             self.accept(prefix+key,callback,args)
         self._sync_secondary();self.setup_output()
         if hasattr(self,'controls'):self.controls.deadzones.refresh_windows(view_id)
@@ -194,6 +200,7 @@ class Aquarium(ShowBase):
         self.args.wall_columns=len(self.views)
 
     def close_view(self,view):
+        if self.streaming and not self._destroying:return
         if view not in self.views:return
         self.window_drag.finish(view,select=False)
         self.views.remove(view);self.window_modes.discard(view.window)
@@ -268,6 +275,7 @@ class Aquarium(ShowBase):
         self.settings.apply(name);self.rebuild_scene();self.settings.save(self.args.settings)
         if hasattr(self,"scale_slider"):self.scale_slider["value"]=self.settings.scale
     def toggle_panel(self):
+        if self.streaming:return
         self.controls.blur()
         if not self.panel_visible:self.show_controls()
         else:
@@ -280,6 +288,7 @@ class Aquarium(ShowBase):
     def escape(self):
         self.toggle_panel()
     def fullscreen(self,window=None):
+        if self.streaming:return
         window=window or (self.controls.deadzones.view().window if hasattr(self,'controls') and self.views else self.aquarium_window)
         if window is None:return
         try:self.window_modes.toggle(window)

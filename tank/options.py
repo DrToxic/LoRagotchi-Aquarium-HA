@@ -17,7 +17,7 @@ from .clipboard import Clipboard
 
 class OptionsPanel:
     WIDTH, HEIGHT = 432, 724
-    TYPES = {'USB serial': 'serial', 'Bluetooth LE': 'ble', 'Network bridge': 'tcp'}
+    TYPES = {'USB serial': 'serial', 'Bluetooth LE': 'ble', 'Network bridge': 'tcp','Radio Wi-Fi (MeshCoMod RX)':'meshcore'}
 
     def __init__(self, app):
         self.app = app; self.entries = []; self.devices = {}; self.scan_pending = False
@@ -25,7 +25,10 @@ class OptionsPanel:
         self.state = 'idle'; self.mode = 'demo' if app.args.demo is not None else 'replay' if app.args.replay else 'live'
         self.profile = ConnectionProfile.load(Path(app.args.settings).with_name('rx-connection.json'))
         if app.args.connect:
-            try: self.profile = ConnectionProfile.from_uri(app.args.connect, app.args.token_file)
+            try:
+                saved_id=self.profile.client_id
+                self.profile = ConnectionProfile.from_uri(app.args.connect, app.args.token_file)
+                self.profile.client_id=saved_id
             except ValueError: pass
         self.root = DirectFrame(parent=app.pixel2d, frameSize=(0,self.WIDTH,-self.HEIGHT,0),
                                 frameColor=(.018,.065,.085,.97))
@@ -34,7 +37,7 @@ class OptionsPanel:
         configure_overlay_bins()
         self.root.setBin('projector-controls',0,100)
         self.label(self.root,'TANK CONTROLS',18,29,17)
-        self.button(self.root,'–',389,25,25,app.toggle_panel)
+        if not getattr(app,'streaming',False):self.button(self.root,'–',389,25,25,app.toggle_panel)
         self.tabs = {name:self.button(self.root,name,18+i*81,66,78,lambda n=name:self.page(n))
                      for i,name in enumerate(('Aquarium','Radio','Deadzones','Decorations','Animations'))}
         for button in self.tabs.values():button["text_scale"]=11
@@ -45,7 +48,7 @@ class OptionsPanel:
         self.decorations=DecorationPanel(self,self.pages['Decorations'])
         self.animations=AnimationPanel(self,self.pages['Animations'])
         app.footer=self.label(self.root,'Starting aquarium…',18,665,12,396)
-        self.label(self.root,'Drag any aquarium to move; drag its edges to resize.\nTab brings controls here. Esc closes that aquarium.',18,699,12,396)
+        self.label(self.root,('Fixed hosted layout. Use browser fullscreen to enlarge.\nDisplay-only viewers cannot change the aquarium.' if getattr(app,'streaming',False) else 'Drag any aquarium to move; drag its edges to resize.\nTab brings controls here. Esc closes that aquarium.'),18,699,12,396)
         self.page('Aquarium'); self.resize()
         for key,operation in [('control-c','copy'),('control-x','cut'),('control-v','paste'),('control-shift-v','replace')]:
             app.accept(key,self.edit_clipboard,[operation])
@@ -100,8 +103,10 @@ class OptionsPanel:
                                     scale=85,pos=(300,0,-174),command=a.scale_label_update)
         a.scale_label=self.label(parent,'',18,207,12)
         self.button(parent,'Apply scale',18,240,120,a.apply_scale)
-        self.button(parent,'Fullscreen [F]',150,240,126,a.fullscreen)
-        self.button(parent,'Add window [V]',288,240,126,a.add_window)
+        fullscreen=self.button(parent,'Fullscreen [F]',150,240,126,a.fullscreen)
+        add_view=self.button(parent,'Add window [V]',288,240,126,a.add_window)
+        if getattr(a,'streaming',False):
+            self.enabled(fullscreen,False);self.enabled(add_view,False)
         a.output_label=self.label(parent,'',18,272,12)
         self.chat_button=self.button(parent,'Channel chat: '+('on' if a.settings.chat_bubbles else 'off'),
                                      18,315,396,a.toggle_chat)
@@ -126,13 +131,13 @@ class OptionsPanel:
         self.device_menu=self.menu(self.local_group,['No devices listed'],24,293,376,self.choose_device)
         self.scan_note=self.label(self.local_group,'Use Refresh or enter a port above.',18,324,12,392)
         self.network_group=DirectFrame(parent=parent,frameColor=(0,0,0,0))
-        self.label(self.network_group,'Bridge host / IP',18,180)
+        self.host_label=self.label(self.network_group,'Bridge host / IP',18,180)
         self.host=self.entry(self.network_group,self.profile.host,24,211,274)
         self.label(self.network_group,'Port',322,180)
         self.port=self.entry(self.network_group,self.profile.port,326,211,74)
-        self.label(self.network_group,'Bridge token file path',18,253)
+        self.token_label=self.label(self.network_group,'Bridge token file path',18,253)
         self.token_file=self.entry(self.network_group,self.profile.token_file,24,285,376)
-        self.label(self.network_group,'Use the token file from your PC/SBC bridge.\nThis is not onboard radio Wi-Fi.',18,320,12,392)
+        self.network_note=self.label(self.network_group,'Use the token file from your PC/SBC bridge.\nThis is not onboard radio Wi-Fi.',18,320,12,392)
         self.help_label=self.label(parent,'',18,367,13,392)
         self.connection_label=self.label(parent,'Not connected',18,423,13,392)
         self.connect_button=self.button(parent,'Connect',18,510,190,self.connect)
@@ -151,13 +156,22 @@ class OptionsPanel:
         if not hasattr(self,'network_group'):return
         self.blur()
         if not initial:self.remember_fields()
+        previous=self.profile.transport
         self.profile.transport=self.TYPES[label]
         self.local_group.hide();self.network_group.hide()
         self.devices={};self.device_menu['items']=['No devices listed'];self.device_menu.set(0,fCommand=0)
         kind=self.profile.transport
-        if kind=='tcp':
+        if kind in ('tcp','meshcore'):
             self.network_group.show()
-            text='Authenticated network bridge. One aquarium client at a time.'
+            direct=kind=='meshcore'
+            self.host_label['text']='Radio host / IP' if direct else 'Bridge host / IP'
+            for field in (self.token_label,self.token_file):field.hide() if direct else field.show()
+            if not initial and previous!=kind and self.port.get() in ('5000','8765'):
+                self.port.enterText('5000' if direct else '8765')
+            self.network_note['text']=('Trusted LAN only; no bridge token.\nNeeds MeshCoMod + the LRX receiver extension.' if direct else
+                                       'Use the token file from your PC/SBC bridge.\nThis is not onboard radio Wi-Fi.')
+            text=('Shared radio: chat/settings read-only by default.\nOne Aquarium snapshot consumer per radio.' if direct else
+                  'Authenticated network bridge. One aquarium client at a time.')
         else:
             self.local_group.show()
             self.endpoint_label['text']='Serial port (e.g. COM4 or /dev/ttyUSB0)' if kind=='serial' else 'Bluetooth address / device identifier'

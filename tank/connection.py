@@ -1,6 +1,7 @@
 """Radio preferences and discovery; no credentials or automatic connections."""
 import asyncio
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+import uuid
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ class ConnectionProfile:
     host: str = '127.0.0.1'
     port: str = '8765'
     token_file: str = ''
+    client_id: str = field(default_factory=lambda: 'aq-'+uuid.uuid4().hex[:24], compare=False)
 
     def uri(self):
         if self.transport == 'serial':
@@ -28,15 +30,17 @@ class ConnectionProfile:
             target = self.ble_address.strip()
             if not target: raise ValueError('Choose or enter a Bluetooth device address.')
             return 'ble:'+target
-        if self.transport == 'tcp':
+        if self.transport in ('tcp', 'meshcore'):
             host = self.host.strip().strip('[]')
             if not host or any(c.isspace() for c in host) or '/' in host:
                 raise ValueError('Enter a bridge hostname or IP address, without a URL prefix.')
             try: port = int(self.port)
             except (ValueError, TypeError): raise ValueError('Bridge port must be 1–65535.') from None
             if not 1 <= port <= 65535: raise ValueError('Bridge port must be 1–65535.')
-            if not self.token_file.strip(): raise ValueError('Enter the path to the bridge token file.')
-            return f'tcp:{host}:{port}'
+            if self.transport == 'tcp' and not self.token_file.strip(): raise ValueError('Enter the path to the bridge token file.')
+            if not self.client_id.isascii() or not self.client_id.replace('-', '').isalnum() or len(self.client_id)>31:
+                raise ValueError('Client identity must be 1–31 ASCII letters, digits or hyphens.')
+            return f'{self.transport}:{host}:{port}'
         raise ValueError('Choose USB serial, Bluetooth LE or Network bridge.')
 
     def token(self):
@@ -58,7 +62,7 @@ class ConnectionProfile:
             raw = json.loads(Path(path).read_text(encoding='utf-8'))
             result = cls(**raw)
             if not all(isinstance(v, str) for v in asdict(result).values()): raise ValueError()
-            if result.transport not in ('serial', 'ble', 'tcp'): raise ValueError()
+            if result.transport not in ('serial', 'ble', 'tcp', 'meshcore'): raise ValueError()
             return result
         except (OSError, ValueError, TypeError): return cls()
 
@@ -68,7 +72,7 @@ class ConnectionProfile:
         result = cls(transport=kind, token_file=str(token_file or ''))
         if kind == 'serial': result.serial_port = target
         elif kind == 'ble': result.ble_address = target
-        elif kind == 'tcp': result.host, result.port = target.rsplit(':', 1)
+        elif kind in ('tcp', 'meshcore'): result.host, result.port = target.rsplit(':', 1)
         result.uri()
         return result
 

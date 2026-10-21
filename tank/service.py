@@ -47,6 +47,7 @@ class Service:
     def run(self):
         store = client = target = token = None
         generation = 0
+        client_id = "loragotchi-aquarium"
         radio_jobs=deque()
         last_history=last_rx=None
         mode = 'demo' if self.args.demo is not None else 'replay' if self.args.replay else 'live'
@@ -76,7 +77,11 @@ class Service:
             else: self.status('idle', 'Radio disconnected · saved copies remain')
             roster()
             if self.args.connect:
-                try: self.connect(ConnectionProfile.from_uri(self.args.connect, self.args.token_file))
+                try:
+                    profile=ConnectionProfile.from_uri(self.args.connect, self.args.token_file)
+                    saved=ConnectionProfile.load(Path(self.args.settings).with_name('rx-connection.json'))
+                    profile.client_id=saved.client_id
+                    self.connect(profile)
                 except ValueError as exc: self.status('error', str(exc))
             reconnect = next_mesh = 0
             while not self.stop.is_set():
@@ -131,6 +136,11 @@ class Service:
                         close_client()
                         if new_store is not None:
                             store.close(); store = new_store; mode = 'live'; roster()
+                        # Keep this installation's identity even if the UI was built
+                        # before a CLI connection saved the initial profile.
+                        saved_path=Path(self.args.settings).with_name('rx-connection.json')
+                        if saved_path.exists():profile.client_id=ConnectionProfile.load(saved_path).client_id
+                        client_id=profile.client_id
                         target = uri; token = new_token; reconnect = next_mesh = 0
                         try: profile.save(Path(self.args.settings).with_name('rx-connection.json'))
                         except OSError: self.notify(dict(kind='notice', text='Connection details could not be saved.'))
@@ -140,15 +150,18 @@ class Service:
                     try:
                         if client is None:
                             self.status('connecting', 'Connecting to RX…', endpoint=target)
+                            transport_options={"client_id":client_id} if target.startswith("meshcore:") else {}
                             client = Client(open_transport(target, token,
-                                            cancel=lambda:self.stop.is_set() or generation!=self.generation), store, self.notify)
+                                            cancel=lambda:self.stop.is_set() or generation!=self.generation, **transport_options), store, self.notify)
                             if generation != self.generation or self.stop.is_set():
                                 close_client(False); continue
                             caps = client.connect()
                             if generation != self.generation or self.stop.is_set():
                                 close_client(); continue
                             RadioSession(client,self.notify,network=target.startswith('tcp:'),
+                                         direct_writable=getattr(self.args,'radio_control',False),
                                          cancel=lambda:self.stop.is_set() or generation!=self.generation)
+                            if target.startswith("meshcore:"):client.radio.initialize_identity()
                             last_history,last_rx=client.radio.history,client.rx
                             self.status('connected', f'RX {client.rx[:10]} · connected · {caps["capacity"]} intake slots',
                                         endpoint=target, rx=client.rx)

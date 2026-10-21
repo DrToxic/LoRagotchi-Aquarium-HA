@@ -1,0 +1,22 @@
+services:
+  aquarium:
+    build: .
+    image: loragotchi-aquarium:ha-preview1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8099:8099"
+    volumes:
+      - ./aquarium-data:/data
+    environment:
+      AQUARIUM_MODE: demo
+      AQUARIUM_WIDTH: 960
+      AQUARIUM_HEIGHT: 540
+      AQUARIUM_FPS: 20
+      AQUARIUM_PASSWORD_FILE: /data/web-password
+      # AQUARIUM_MODE: live
+      # AQUARIUM_RADIO_HOST: 192.168.1.50
+      # AQUARIUM_RADIO_PORT: 5000
+      # AQUARIUM_RADIO_CONTROL: "false"
+    shm_size: 128m
+    security_opt:
+      - no-new-privileges:true

@@ -6,3 +6,6 @@ __pycache__/
 .local/
 build/
 dist/
+
+.venv
+aquarium-data/

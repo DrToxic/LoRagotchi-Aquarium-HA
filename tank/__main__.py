@@ -8,8 +8,10 @@ def main():
     mode=parser.add_mutually_exclusive_group()
     mode.add_argument("--demo",type=int,nargs="?",const=12,help="bounded synthetic visitors (0..256), no radio")
     mode.add_argument("--replay",type=Path,help="JSONL records: rx public-key hex and payload hex")
-    mode.add_argument("--connect",help="serial:PORT, ble:ADDRESS or tcp:HOST:PORT")
+    mode.add_argument("--connect",help="serial:PORT, ble:ADDRESS or tcp:HOST:PORT (bridge), meshcore:HOST:PORT (radio)")
     parser.add_argument("--token-file",type=Path,help="32-byte pairing token for authenticated TCP bridge")
+    parser.add_argument("--radio-control",action="store_true",help="Allow chat/configuration writes to a direct MeshCoMod radio (off by default)")
+    parser.add_argument("--stream-layout",action="store_true",help="Fixed single aquarium at 0,0 and operator beside it for browser streaming")
     parser.add_argument("--database",type=Path)
     parser.add_argument("--session",default="community")
     parser.add_argument("--settings",type=Path,default=Path(os.environ.get('XDG_CONFIG_HOME',Path.home()/'.config'))/'loragotchi-tank'/'settings.json')
@@ -38,6 +40,8 @@ def main():
     if args.second_height is not None and args.second_height<180:parser.error("Second output height must be at least 180")
     if args.render_scale is not None and not .25<=args.render_scale<=2:parser.error("Render scale must be .25..2")
     if args.connect and args.connect.startswith('tcp:') and not args.token_file:parser.error("TCP bridge needs --token-file")
+    if args.stream_layout:
+        args.wall_columns=1;args.fullscreen=False
     args.live_database=live_database()
     if not args.database:
         if args.demo is not None or args.replay:args.database=Path(':memory:')

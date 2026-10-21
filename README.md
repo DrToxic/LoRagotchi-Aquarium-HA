@@ -470,3 +470,12 @@ Original Author: https://github.com/DarkButterfly85/LoRagotchi-DX
 Fork: https://github.com/DrToxic/LoRagotchi-DX
 
 RX/DX firmware source and binaries are not included in this aquarium repository.
+
+## Home Assistant / streamed native preview
+
+The additive **0.3.0 preview** runs this same native Aquarium in a container,
+with a view-only aquarium stream and full operator view. Both HAOS local-app
+and HA Container/sibling Docker instructions are in
+[the Home Assistant guide](docs/HOME_ASSISTANT.md). The default is demo-only;
+shared-radio live mode requires the separately tested, pinned MeshCoMod RX
+firmware overlay. Nothing here flashes or reconfigures an existing radio.

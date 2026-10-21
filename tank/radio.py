@@ -12,11 +12,11 @@ from .radio_store import RadioHistory
 
 
 class RadioSession:
-    def __init__(self, client, emit, *, network=False, cancel=lambda: False):
+    def __init__(self, client, emit, *, network=False, direct_writable=False, cancel=lambda: False):
         self.client, self.transport, self.emit, self.cancel = client, client.transport, emit, cancel
         self.history=RadioHistory(client.store.db)
         self.network=network
-        self.writable=not network
+        self.writable=direct_writable if getattr(self.transport,"direct_radio",False) else not network
         self.supported=bool(getattr(self.transport,'supports_mesh_messages',True))
         self.info={}; self.device={}; self.contacts={}; self.channels={}; self.discovered={}
         self.pending={}; self.early_acks=OrderedDict(); self.last_timestamp=self.history.last_timestamp(client.rx)
@@ -41,7 +41,7 @@ class RadioSession:
     def request(self, payload, expected=(0,), *, write=False, collect=False):
         if self.cancel(): raise ConnectionAbortedError('Radio operation cancelled')
         if not self.supported: raise ValueError('MeshCore client features need BLE MTU 179 or greater. USB is supported.')
-        if write and not self.writable: raise ValueError('Bridge is read-only. Start it with --radio-control to enable writes.')
+        if write and not self.writable: raise ValueError('Radio control is read-only. Enable --radio-control on the direct client or bridge to allow writes.')
         if len(payload)>getattr(self.transport,'max_payload',176): raise ValueError('Command exceeds negotiated Bluetooth MTU. Use USB.')
         self.transport.send(payload)
         deadline=time.monotonic()+(8 if collect else 4)
@@ -86,8 +86,7 @@ class RadioSession:
                 for index in range(self.device['max_channels']):
                     self.tasks.insert(len(self.tasks)-1,('channel',index))
             elif task=='self':
-                self.info=wire.self_info(self.request(b'\x01'+bytes(7)+b'Aquarium',(5,)))
-                if self.info['key']!=self.client.rx: raise ProtocolError('Companion identity differs from RX identity')
+                self.initialize_identity()
             elif task=='contacts': self.refresh_contacts()
             elif task=='battery':
                 packet=self.request(b'\x14',(12,))
@@ -115,6 +114,15 @@ class RadioSession:
                 self.tasks.clear();self.loading=False
                 self.notice('Radio setup unavailable. Update the bridge/firmware, then Refresh.')
             self.publish()
+
+    def initialize_identity(self):
+        payload = b'\x01'+bytes(7)+b'Aquarium'
+        if getattr(self.transport, 'direct_radio', False):
+            identity = self.transport.client_id.encode('ascii')
+            if not 1 <= len(identity) <= 31: raise ValueError('Invalid MeshCoMod client identity')
+            payload = bytes([1, len(identity)])+identity+b'Aquarium'
+        self.info=wire.self_info(self.request(payload,(5,)))
+        if self.info['key']!=self.client.rx: raise ProtocolError('Companion identity differs from RX identity')
 
     def refresh_contacts(self):
         records=self.request(b'\x04',(4,),collect=True)

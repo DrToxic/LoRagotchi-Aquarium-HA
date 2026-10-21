@@ -16,7 +16,8 @@ class DeadzonePanel:
         self.add_button=c.button(parent,'Add',270,137,66,self.add_window)
         self.close_button=c.button(parent,'Close',346,137,68,self.close_window)
         c.button(parent,'Save layout',18,178,120,self.save_layout)
-        c.button(parent,'Fullscreen',150,178,126,self.fullscreen)
+        fullscreen=c.button(parent,'Fullscreen',150,178,126,self.fullscreen)
+        if getattr(self.app,'streaming',False):c.enabled(fullscreen,False)
         self.bounds_button=c.button(parent,'Edges: on',288,178,126,self.toggle_bounds)
         self.preview=DirectFrame(parent=parent,frameSize=(0,396,-124,0),pos=(18,0,-197),
                                  frameColor=(.008,.025,.035,1),state=DGG.NORMAL)
@@ -44,7 +45,7 @@ class DeadzonePanel:
     def choose_window(self,label):
         if hasattr(self,'window_ids') and label in self.window_ids:
             self.selected_view=self.window_ids[label]
-            self.controls.enabled(self.close_button,True)
+            self.controls.enabled(self.close_button,not getattr(self.app,"streaming",False))
             self.redraw()
 
     def refresh_windows(self,selected=None):
@@ -54,8 +55,8 @@ class DeadzonePanel:
             self.selected_view=next(iter(self.window_ids.values()),None)
         self.window_menu['items']=list(self.window_ids) or ['No aquarium views']
         self.window_menu.set(next((k for k,v in self.window_ids.items() if v==self.selected_view),'No aquarium views'),fCommand=0)
-        self.controls.enabled(self.close_button,bool(self.window_ids))
-        self.controls.enabled(self.add_button,len(self.app.views)<MAX_WINDOWS)
+        self.controls.enabled(self.close_button,bool(self.window_ids) and not getattr(self.app,"streaming",False))
+        self.controls.enabled(self.add_button,len(self.app.views)<MAX_WINDOWS and not getattr(self.app,"streaming",False))
         self.bounds_button['text']='Edges: '+('on' if self.app.display.constrain else 'off')
         self.redraw()
 
