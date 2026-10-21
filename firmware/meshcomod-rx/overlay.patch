@@ -1,0 +1,1026 @@
+diff --git a/examples/companion_radio/LoRagotchiChannel.h b/examples/companion_radio/LoRagotchiChannel.h
+new file mode 100644
+index 0000000..e9d360b
+--- /dev/null
++++ b/examples/companion_radio/LoRagotchiChannel.h
+@@ -0,0 +1,48 @@
++#pragma once
++
++#include <Utils.h>
++#include "LoRagotchiChannelStatus.h"
++#include <cstring>
++
++// Companion-local policy; the shared MeshCore channel/storage APIs stay unchanged.
++namespace LoRagotchiChannel {
++
++static constexpr char NAME[] = "#loragotchi-dx";
++
++template <typename Mesh>
++Result ensureJoined(Mesh& host) {
++  ChannelDetails wanted{};
++  memcpy(wanted.name, NAME, sizeof(NAME));
++  // Standard MeshCore hashtag key: first 16 bytes of SHA256, including '#'.
++  // The zero-filled upper half makes setChannel() derive the 128-bit key hash.
++  mesh::Utils::sha256(wanted.channel.secret, 16,
++                     reinterpret_cast<const uint8_t*>(NAME), sizeof(NAME) - 1);
++
++  int vacant = -1;
++  bool nameConflict = false;
++  const uint8_t emptySecret[sizeof(wanted.channel.secret)] = {};
++  ChannelDetails current;
++  for (int i = 0; host.getChannel(i, current); ++i) {
++    // Membership is determined by the complete key, not a one-byte radio hash
++    // or a display label. An existing alias keeps its slot/name/key.
++    if (current.name[0] &&
++        memcmp(current.channel.secret, wanted.channel.secret, sizeof(emptySecret)) == 0) {
++      return Result::AlreadyJoined;
++    }
++    if (memcmp(current.name, NAME, sizeof(NAME)) == 0) nameConflict = true;
++    // Preserve unnamed slots with nonzero keys as well as every named channel.
++    if (vacant < 0 && !current.name[0] &&
++        memcmp(current.channel.secret, emptySecret, sizeof(emptySecret)) == 0) {
++      vacant = i;
++    }
++  }
++  // Never overwrite a same-named private channel or an occupied slot.
++  if (vacant < 0) return Result::Full;
++  if (nameConflict) return Result::NameConflict;
++  // addChannel() tracks defaults, not slots restored by loadChannels().
++  // Using it here could overwrite a saved channel. Use the actual vacant index.
++  if (!host.setChannel(vacant, wanted)) return Result::SetFailed;
++  return Result::Added;
++}
++
++}  // namespace LoRagotchiChannel
+diff --git a/examples/companion_radio/LoRagotchiChannelStatus.h b/examples/companion_radio/LoRagotchiChannelStatus.h
+new file mode 100644
+index 0000000..ad2ca1c
+--- /dev/null
++++ b/examples/companion_radio/LoRagotchiChannelStatus.h
+@@ -0,0 +1,8 @@
++#pragma once
++
++namespace LoRagotchiChannel {
++enum class Result { AlreadyJoined, Added, Full, NameConflict, SetFailed };
++// Written once by MyMesh::begin(), before the UI starts. No channel mutation
++// occurs when a notice is rendered or dismissed.
++extern Result startupResult;
++}
+diff --git a/examples/companion_radio/LoRagotchiRX.h b/examples/companion_radio/LoRagotchiRX.h
+new file mode 100644
+index 0000000..c60bb14
+--- /dev/null
++++ b/examples/companion_radio/LoRagotchiRX.h
+@@ -0,0 +1,265 @@
++#pragma once
++// LoRagotchi-owned intake/outbox. No Arduino dependencies: the production state
++// machine is also compiled by the host fault-injection tests.
++#include <stdint.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++#include <limits.h>
++
++namespace lrx {
++static constexpr uint8_t COMMAND = 0x70, VERSION = 1, CAPACITY = 4;
++static constexpr uint32_t HOLD_MS = 4000, RESERVE_MS = 30000, RETRY_MS = 10000;
++enum State : uint8_t { Empty, Reserved, Captured, Delivered, Unresolved };
++#pragma pack(push, 1)
++struct Slot {
++  uint8_t owner[32]; uint32_t tx, fish, id, statusId;
++  uint8_t state, stage, mode, body, scales, eyes, appearance;
++  uint16_t tint; char name[24];
++  uint8_t attempts, uploaded, statusUploaded;
++};
++struct Tombstone { uint8_t owner[32]; uint32_t tx, fish; };
++struct Journal {
++  uint32_t magic, version, generation, nextId;
++  Slot slots[CAPACITY]; Tombstone recent[8]; uint8_t cursor;
++  uint32_t checksum;
++};
++#pragma pack(pop)
++inline uint32_t checksum(const Journal& j) {
++  uint32_t h=2166136261UL; const auto* p=reinterpret_cast<const uint8_t*>(&j);
++  for(size_t i=0;i<offsetof(Journal, checksum);++i) h=(h^p[i])*16777619UL;
++  return h;
++}
++inline bool valid(const Journal& j) {
++  return j.magic==0x3158524cUL && j.version==1 && j.nextId>0 && j.cursor<8 && j.checksum==checksum(j);
++}
++// strtoul saturates at ULONG_MAX on overflow, which equals UINT32_MAX on the
++// radios but not on the 64-bit host. Validate before multiplying on every CPU.
++inline bool parseUnsigned(const char* text,uint32_t maximum,uint32_t& value) {
++  if(!text || !*text)return false;
++  uint32_t result=0;
++  for(const char* p=text;*p;++p) {
++    if(*p<'0' || *p>'9')return false;
++    const uint32_t digit=uint32_t(*p-'0');
++    if(result>maximum/10 || (result==maximum/10 && digit>maximum%10))return false;
++    result=result*10+digit;
++  }
++  value=result;return true;
++}
++struct IO {
++  virtual bool save(const Journal& journal)=0;
++  virtual bool send(const uint8_t owner[32], const char* text, uint32_t& ack, uint32_t& timeout)=0;
++  virtual ~IO() {}
++};
++class Receiver {
++  IO& io;
++  uint32_t due[CAPACITY]={}, ack[CAPACITY][4]={};
++  bool ackKnown[CAPACITY][4]={};
++  bool capturedDurably[CAPACITY]={};
++  uint32_t lease=0, leaseUntil=0, saveRetry=0;
++  bool storageOK=true, storageBlocked=false;
++  static bool reached(uint32_t now,uint32_t at) {return int32_t(now-at)>=0;}
++  static uint32_t u32(const uint8_t* p) {return uint32_t(p[0])|uint32_t(p[1])<<8|uint32_t(p[2])<<16|uint32_t(p[3])<<24;}
++  static void put32(uint8_t* p,uint32_t v) {for(int i=0;i<4;i++)p[i]=v>>(8*i);}
++  bool persist() {
++    ++data.generation; data.checksum=checksum(data);
++    storageOK=io.save(data);
++    if(storageOK)for(int i=0;i<CAPACITY;++i)
++      if(data.slots[i].state>=Captured)capturedDurably[i]=true;
++    return storageOK;
++  }
++  bool same(const Slot& s,const uint8_t* owner,uint32_t tx,uint32_t fish) const {
++    return s.state && s.tx==tx && s.fish==fish && !memcmp(s.owner,owner,32);
++  }
++  void reply(const uint8_t* owner,const char* verb,uint32_t tx,uint32_t fish,bool aquarium=false) {
++    char msg[80]; uint32_t unused=0,timeout=0;
++    snprintf(msg,sizeof(msg),"LFG1|%s|%lu|%lu%s",verb,(unsigned long)tx,(unsigned long)fish,
++        !strcmp(verb,"RETURN")?(aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused,timeout);
++  }
++  int reusable() const {
++    for(int i=0;i<CAPACITY;++i) if(data.slots[i].state==Empty)return i;
++    int best=-1;
++    for(int i=0;i<CAPACITY;++i) {
++      const auto& s=data.slots[i];
++      // Unresolved jobs are never evicted; operator recovery is explicit.
++      if(s.state==Delivered && s.uploaded && s.statusUploaded && (best<0 || s.id<data.slots[best].id))best=i;
++    }
++    return best;
++  }
++ public:
++  Journal data{};
++  explicit Receiver(IO& backend):io(backend) {
++    data.magic=0x3158524cUL;data.version=1;data.nextId=1;
++  }
++  bool begin(const Journal* saved,uint32_t now,bool allowFresh=true) {
++    if(!saved && !allowFresh){storageBlocked=true;storageOK=false;return false;}
++    if(saved && valid(*saved)) {
++      data=*saved;
++      for(int i=0;i<CAPACITY;++i)capturedDurably[i]=data.slots[i].state>=Captured;
++    }
++    for(int i=0;i<CAPACITY;++i) {
++      if(data.slots[i].state==Reserved)data.slots[i]=Slot{};
++      due[i]=now; // reboot prioritises unfinished returns, not another hold
++    }
++    return persist();
++  }
++  bool healthy() const {return storageOK;}
++  bool receive(const uint8_t owner[32],const char* text,uint32_t now) {
++    if(!text || strncmp(text,"LFG1|",5))return false;
++    char buf[160]; if(strlen(text)>=sizeof(buf))return true;
++    strcpy(buf,text); char* fields[10]={}; size_t n=0; char* context=nullptr;
++    for(char* p=strtok_r(buf,"|",&context);p && n<10;p=strtok_r(nullptr,"|",&context))fields[n++]=p;
++    if(n<4)return true;
++    uint32_t tx=0,fish=0;
++    if(!parseUnsigned(fields[2],UINT32_MAX,tx) || !parseUnsigned(fields[3],UINT32_MAX,fish))return true;
++    int index=-1;
++    for(int i=0;i<CAPACITY;i++)if(same(data.slots[i],owner,tx,fish))index=i;
++    if(index<0)for(const auto& t:data.recent)if(t.tx==tx && t.fish==fish && !memcmp(t.owner,owner,32)) {
++      reply(owner,"RETURN",tx,fish,true);return true;
++    }
++    if(!strcmp(fields[1],"REQ")) {
++      if(n<5)return true;
++      uint32_t stage=0;if(!parseUnsigned(fields[4],3,stage))return true;
++      if(index>=0) {
++        reply(owner,data.slots[index].state>=Delivered || data.slots[index].attempts ? "RETURN":"ACK",tx,fish,capturedDurably[index]);
++        return true;
++      }
++      index=reusable();
++      if(index<0 || !storageOK || data.nextId>=0x7ffffffeUL) {reply(owner,"BUSY",tx,fish);return true;}
++      auto& s=data.slots[index];
++      if(s.state) {
++        auto& t=data.recent[data.cursor++];data.cursor%=8;
++        memcpy(t.owner,s.owner,32);t.tx=s.tx;t.fish=s.fish;
++      }
++      s=Slot{};capturedDurably[index]=false;memcpy(s.owner,owner,32);s.tx=tx;s.fish=fish;s.stage=stage;
++      s.state=Reserved;s.body=s.scales=s.eyes=6;s.tint=0xffff;s.mode='M';
++      if(n>=6)strncpy(s.name,fields[5],sizeof(s.name)-1);
++      due[index]=now+RESERVE_MS;memset(ack[index],0,sizeof(ack[index]));
++      memset(ackKnown[index],0,sizeof(ackKnown[index]));
++      reply(owner,"ACK",tx,fish);return true;
++    }
++    if(index<0)return true; // unsolicited/late COMMIT cannot create a fish
++    auto& s=data.slots[index];
++    if(!strcmp(fields[1],"COMMIT")) {
++      if(s.state>=Delivered || s.attempts) {reply(owner,"RETURN",tx,fish,capturedDurably[index]);return true;}
++      if(s.state==Reserved) {
++        if(n==9 && (fields[4][0]=='C' || fields[4][0]=='M') && !fields[4][1]) {
++          uint32_t values[4]={};bool good=true;
++          for(int k=0;k<4;k++)if(!parseUnsigned(fields[k+5],k==3?65535U:6U,values[k]))good=false;
++          if(good){s.mode=fields[4][0];s.body=values[0];s.scales=values[1];s.eyes=values[2];s.tint=values[3];s.appearance=1;}
++        }
++        s.id=data.nextId++;s.state=Captured;due[index]=now+HOLD_MS;
++        if(!persist()) {due[index]=now;return true;} // no ARRIVED without durable snapshot
++      }
++      if(storageOK)reply(owner,"ARRIVED",tx,fish);
++    } else if(!strcmp(fields[1],"RECALL")) {
++      if(s.state==Reserved) {reply(owner,"RETURN",tx,fish);s=Slot{};}
++      else if(s.state==Captured)due[index]=now;
++      else reply(owner,"RETURN",tx,fish,capturedDurably[index]);
++    }
++    return true;
++  }
++  void tick(uint32_t now) {
++    if(!storageBlocked && !storageOK && reached(now,saveRetry)){persist();saveRetry=now+5000;}
++    for(int i=0;i<CAPACITY;i++) {
++      auto& s=data.slots[i];
++      if(s.state==Reserved && reached(now,due[i])){s=Slot{};continue;}
++      if(s.state!=Captured || !reached(now,due[i]))continue;
++      if(s.attempts>=4) {s.state=Unresolved;s.statusId=data.nextId++;persist();continue;}
++      char msg[80];snprintf(msg,sizeof(msg),"LFG1|RETURN|%lu|%lu|C%s",(unsigned long)s.tx,(unsigned long)s.fish,
++          capturedDurably[i]?"|AQUARIUM1":"");
++      uint8_t attempt=s.attempts++;persist(); // attempt budget survives reset
++      uint32_t hash=0,timeout=0,wait=RETRY_MS;
++      if(io.send(s.owner,msg,hash,timeout)) {
++        ack[i][attempt]=hash;ackKnown[i][attempt]=true;
++        if(timeout>wait)wait=timeout>0x7fffffffUL?0x7fffffffUL:timeout;
++      }
++      due[i]=now+wait;
++    }
++  }
++  bool acknowledgeRadio(uint32_t hash) {
++    for(int i=0;i<CAPACITY;i++)for(int attempt=0;attempt<4;++attempt)if(ackKnown[i][attempt] && ack[i][attempt]==hash &&
++        (data.slots[i].state==Captured || data.slots[i].state==Unresolved)) {
++      data.slots[i].state=Delivered;data.slots[i].statusId=data.nextId++;data.slots[i].statusUploaded=0;persist();return true;
++    }
++    return false;
++  }
++  uint16_t event(uint32_t id,uint8_t* out) const {
++    for(const auto& s:data.slots)if(s.state>=Captured) {
++      if(id==s.id) {
++        size_t p=0;out[p++]=1;put32(out+p,id);p+=4;memcpy(out+p,s.owner,32);p+=32;
++        put32(out+p,s.fish);p+=4;put32(out+p,s.tx);p+=4;
++        out[p++]=s.stage;out[p++]=s.mode;out[p++]=s.body;out[p++]=s.scales;out[p++]=s.eyes;
++        out[p++]=s.tint;out[p++]=s.tint>>8;out[p++]=s.appearance;
++        memcpy(out+p,s.name,24);p+=24;return p;
++      }
++      if(id==s.statusId && s.state>=Delivered) {
++        out[0]=2;put32(out+1,id);put32(out+5,s.id);out[9]=s.state==Delivered?1:2;out[10]=s.attempts;return 11;
++      }
++    }
++    return 0;
++  }
++  uint32_t nextEvent() const {
++    uint32_t next=0;
++    for(const auto& s:data.slots)if(s.state>=Captured) {
++      uint32_t id=!s.uploaded?s.id:(!s.statusUploaded && s.state>=Delivered?s.statusId:0);
++      if(id && (!next || id<next))next=id;
++    }
++    return next;
++  }
++  // Extension fragments always fit the default BLE ATT payload (20 bytes).
++  // GATT notifications/writes are complete companion frames, not streams.
++  size_t command(const uint8_t* in,size_t len,uint8_t* out,uint32_t now,const uint8_t rxKey[32],uint8_t transports) {
++    if(!len || in[0]!=COMMAND)return 0;
++    out[0]=COMMAND;out[1]='R';out[2]='X';out[3]=VERSION;out[4]=len>4?in[4]:255;out[5]=1;
++    if(len<9 || in[1]!='R' || in[2]!='X' || in[3]!=VERSION)return 6;
++    static constexpr uint8_t sizes[]={9,10,9,15,13,9,13};
++    if(in[4]>=sizeof(sizes) || len!=sizes[in[4]])return 6;
++    uint32_t token=u32(in+5);if(!token)return 6;
++    if(lease && lease!=token && !reached(now,leaseUntil)){out[5]=2;return 6;}
++    if(in[4]!=0 && (lease!=token || reached(now,leaseUntil)))return 6;
++    lease=token;leaseUntil=now+15000;out[5]=0;
++    switch(in[4]) {
++      case 0:out[6]=CAPACITY;out[7]=transports;out[8]=10;out[9]=storageOK;return 10;
++      case 1: {
++        if(len!=10 || in[9]>=32)break;
++        uint8_t offset=in[9],count=32-offset;if(count>12)count=12;
++        out[6]=offset;out[7]=32;memcpy(out+8,rxKey+offset,count);return 8+count;
++      }
++      case 2: {
++        if(!storageOK){out[5]=3;return 6;}
++        uint32_t id=nextEvent();uint8_t buf[80];uint16_t size=event(id,buf);
++        put32(out+6,id);out[10]=size;out[11]=size>>8;return 12;
++      }
++      case 3: {
++        if(!storageOK){out[5]=3;return 6;}
++        if(len!=15)break;uint8_t buf[80];uint16_t size=event(u32(in+9),buf);
++        uint16_t offset=uint16_t(in[13])|uint16_t(in[14])<<8;if(!size || offset>=size)break;
++        uint16_t count=size-offset;if(count>10)count=10;
++        out[6]=offset;out[7]=offset>>8;out[8]=size;out[9]=size>>8;memcpy(out+10,buf+offset,count);return 10+count;
++      }
++      case 4: {
++        if(len!=13)break;uint32_t id=u32(in+9);
++        for(auto& s:data.slots)if(s.state>=Captured && (id==s.id || (id==s.statusId && s.state>=Delivered))) {
++          uint8_t& flag=id==s.statusId?s.statusUploaded:s.uploaded;
++          if(!flag){flag=1;if(!persist()){flag=0;out[5]=3;}}
++          return 6;
++        }
++        break;
++      }
++      case 5:lease=0;return 6;
++      // Explicit operator retry of an unresolved RETURN; upload identity unchanged.
++      case 6: {
++        if(len!=13)break;uint32_t id=u32(in+9);
++        for(int i=0;i<CAPACITY;i++)if(data.slots[i].id==id && data.slots[i].state==Unresolved){
++          auto& s=data.slots[i];s.state=Captured;s.attempts=0;s.statusUploaded=0;due[i]=now;
++          if(!persist())out[5]=3;return 6;
++        }
++        break;
++      }
++    }
++    out[5]=1;return 6;
++  }
++};
++} // namespace lrx
+diff --git a/examples/companion_radio/LoRagotchiRXBridge.cpp b/examples/companion_radio/LoRagotchiRXBridge.cpp
+new file mode 100644
+index 0000000..c2350e0
+--- /dev/null
++++ b/examples/companion_radio/LoRagotchiRXBridge.cpp
+@@ -0,0 +1,96 @@
++#ifdef LORAGOTCHI_RX
++#include "MyMesh.h"
++#include "LoRagotchiRX.h"
++#include "LoRagotchiRXJournal.h"
++#include "LoRagotchiRXBridge.h"
++#ifdef LORAGOTCHI_RX_EINK_TASK
++#include "ui-rx-paper/ReceiverStatus.h"
++#endif
++#if !defined(ESP32) && !defined(NRF52_PLATFORM)
++#error "RX persistence supports ESP32 SPIFFS and nRF52 LittleFS targets"
++#endif
++extern MyMesh the_mesh;
++extern DataStore store;
++namespace {
++const char* paths[] = {"/lrx-a.dat", "/lrx-b.dat"};
++FILESYSTEM* filesystem() {
++  // nRF52 uses the existing extra filesystem alongside contacts, keeping the
++  // smaller identity/settings region free. ESP32 uses its normal SPIFFS.
++  auto* extra = store.getSecondaryFS();
++  return extra ? extra : store.getPrimaryFS();
++}
++struct Files : lrx::JournalFiles {
++  bool exists(unsigned bank) override { return filesystem()->exists(paths[bank]); }
++  bool read(unsigned bank, lrx::Journal& journal) override {
++    auto file = store.openRead(filesystem(), paths[bank]);
++    if (!file) return false;
++    const bool ok = file.size() == sizeof(journal) &&
++        file.read(reinterpret_cast<uint8_t*>(&journal), sizeof(journal)) == sizeof(journal);
++    file.close();
++    return ok;
++  }
++  bool write(unsigned bank, const lrx::Journal& journal) override {
++#if defined(NRF52_PLATFORM)
++    // Adafruit FILE_O_WRITE does not truncate. Remove only the inactive bank.
++    if (exists(bank) && !filesystem()->remove(paths[bank])) return false;
++    auto file = filesystem()->open(paths[bank], FILE_O_WRITE);
++#else
++    auto file = filesystem()->open(paths[bank], "w");
++#endif
++    if (!file) return false;
++    const size_t written = file.write(reinterpret_cast<const uint8_t*>(&journal), sizeof(journal));
++    file.flush();
++    file.close();
++    return written == sizeof(journal);
++  }
++} files;
++lrx::JournalStore journalStore(files);
++struct Backend : lrx::IO {
++  bool save(const lrx::Journal& journal) override { return journalStore.save(journal); }
++  bool send(const uint8_t owner[32], const char* text, uint32_t& ack, uint32_t& timeout) override {
++    auto* contact = the_mesh.lookupContactByPubKey(owner, 32);
++    if (!contact) return false;
++    return the_mesh.sendMessage(*contact, the_mesh.getRTCClock()->getCurrentTime(),
++                               0, text, ack, timeout) >= 0;
++  }
++} backend;
++lrx::Receiver receiver(backend);
++}
++void loragotchiRXBegin() {
++  lrx::Journal saved{};
++  bool fresh = false;
++  const bool loaded = journalStore.load(saved, fresh);
++  receiver.begin(loaded ? &saved : nullptr, millis(), fresh);
++}
++void loragotchiRXStatus(uint8_t& uploads, uint8_t& returns, uint8_t& failed, bool& healthy) {
++  healthy = receiver.healthy(); uploads = returns = failed = 0;
++  for (const auto& slot : receiver.data.slots) {
++    if (slot.state >= lrx::Captured && !slot.uploaded) ++uploads;
++    if (slot.state == lrx::Captured) ++returns;
++    if (slot.state == lrx::Unresolved) ++failed;
++  }
++}
++#ifdef LORAGOTCHI_RX_EINK_TASK
++void loragotchiRXStatus(lrx::DisplayStatus& status) {
++  status = lrx::displayStatus(receiver);
++}
++#endif
++void loragotchiRXTick() { receiver.tick(millis()); }
++bool loragotchiRXReceive(const uint8_t* owner, const char* text) {
++  return receiver.receive(owner, text, millis());
++}
++void loragotchiRXAck(uint32_t hash) { receiver.acknowledgeRadio(hash); }
++size_t loragotchiRXCommand(const uint8_t* in, size_t len, uint8_t* out, const uint8_t* identity) {
++  uint8_t transports = 0;
++#if defined(ENABLE_USB_INTERFACE) || defined(MULTI_TRANSPORT_COMPANION)
++  transports |= 1;
++#endif
++#ifdef BLE_PIN_CODE
++  transports |= 2;
++#endif
++#ifdef MULTI_TRANSPORT_COMPANION
++  transports |= 4;  // native framed TCP/WebSocket via MeshCoMod multiplexer
++#endif
++  return receiver.command(in, len, out, millis(), identity, transports);
++}
++#endif
+diff --git a/examples/companion_radio/LoRagotchiRXBridge.h b/examples/companion_radio/LoRagotchiRXBridge.h
+new file mode 100644
+index 0000000..c5e0c00
+--- /dev/null
++++ b/examples/companion_radio/LoRagotchiRXBridge.h
+@@ -0,0 +1,15 @@
++#pragma once
++#ifdef LORAGOTCHI_RX
++#include <stddef.h>
++#include <stdint.h>
++namespace lrx { struct DisplayStatus; }
++void loragotchiRXBegin();
++void loragotchiRXStatus(uint8_t& uploads,uint8_t& returns,uint8_t& failed,bool& healthy);
++#ifdef LORAGOTCHI_RX_EINK_TASK
++void loragotchiRXStatus(lrx::DisplayStatus& status);
++#endif
++void loragotchiRXTick();
++bool loragotchiRXReceive(const uint8_t* owner,const char* text);
++void loragotchiRXAck(uint32_t hash);
++size_t loragotchiRXCommand(const uint8_t* in,size_t len,uint8_t* out,const uint8_t* identity);
++#endif
+diff --git a/examples/companion_radio/LoRagotchiRXJournal.h b/examples/companion_radio/LoRagotchiRXJournal.h
+new file mode 100644
+index 0000000..31ad552
+--- /dev/null
++++ b/examples/companion_radio/LoRagotchiRXJournal.h
+@@ -0,0 +1,43 @@
++#pragma once
++#include "LoRagotchiRX.h"
++
++namespace lrx {
++// Filesystem adapter supplies whole-bank operations. Never overwrite the last
++// validated bank, even after a short write, failed readback or reboot.
++struct JournalFiles {
++  virtual bool exists(unsigned bank) = 0;
++  virtual bool read(unsigned bank, Journal& journal) = 0;
++  virtual bool write(unsigned bank, const Journal& journal) = 0;
++  virtual ~JournalFiles() {}
++};
++class JournalStore {
++  JournalFiles& files;
++  int active = -1;
++public:
++  explicit JournalStore(JournalFiles& backend) : files(backend) {}
++  bool load(Journal& result, bool& fresh) {
++    Journal a{}, b{};
++    const bool va = files.read(0, a) && valid(a);
++    const bool vb = files.read(1, b) && valid(b);
++    fresh = !files.exists(0) && !files.exists(1);
++    active = -1;
++    if (va && (!vb || int32_t(a.generation - b.generation) > 0)) {
++      result = a;
++      active = 0;
++    } else if (vb) {
++      result = b;
++      active = 1;
++    }
++    return active >= 0;
++  }
++  bool save(const Journal& journal) {
++    const unsigned bank = active == 0 ? 1 : 0;
++    if (!valid(journal) || !files.write(bank, journal)) return false;
++    Journal verify{};
++    if (!files.read(bank, verify) || !valid(verify) ||
++        memcmp(&journal, &verify, sizeof(journal))) return false;
++    active = bank;
++    return true;
++  }
++};
++} // namespace lrx
+diff --git a/examples/companion_radio/MyMesh.cpp b/examples/companion_radio/MyMesh.cpp
+index 6031009..a66ff0d 100644
+--- a/examples/companion_radio/MyMesh.cpp
++++ b/examples/companion_radio/MyMesh.cpp
+@@ -1,4 +1,9 @@
+ #include "MyMesh.h"
++#include "LoRagotchiRXBridge.h"
++#ifdef LORAGOTCHI_RX
++#include "LoRagotchiChannel.h"
++LoRagotchiChannel::Result LoRagotchiChannel::startupResult = LoRagotchiChannel::Result::AlreadyJoined;
++#endif
+ 
+ #include <Arduino.h> // needed for PlatformIO
+ #ifdef ENABLE_WIFI_INTERFACE
+@@ -1142,7 +1147,7 @@ int MyMesh::getNextFromHistoryForClient(const char* client_id, uint8_t frame[],
+     strncpy(history_clients[slot].client_id, cid, MAX_CLIENT_ID_LEN);
+     history_clients[slot].client_id[MAX_CLIENT_ID_LEN] = '\0';
+     history_clients[slot].last_delivered_seq = history_next_seq > (uint32_t)history_count
+-      ? history_next_seq - (uint32_t)history_count : 0;
++      ? history_next_seq - (uint32_t)history_count - 1 : 0; // cursor precedes oldest retained message
+   }
+ 
+   uint32_t last = history_clients[slot].last_delivered_seq;
+@@ -1767,6 +1772,9 @@ void MyMesh::onContactPathUpdated(const ContactInfo &contact) {
+ }
+ 
+ ContactInfo*  MyMesh::processAck(const uint8_t *data) {
++#ifdef LORAGOTCHI_RX
++  uint32_t rxHash; memcpy(&rxHash, data, sizeof(rxHash)); loragotchiRXAck(rxHash);
++#endif
+ #if defined(DISPLAY_CLASS)
+   // Diag: log every processAck call so we can see whether the ACK matching
+   // pipeline gets reached after the radio surface dispatches an ACK frame.
+@@ -1806,6 +1814,9 @@ ContactInfo*  MyMesh::processAck(const uint8_t *data) {
+ 
+ void MyMesh::queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packet *pkt,
+                           uint32_t sender_timestamp, const uint8_t *extra, int extra_len, const char *text) {
++#ifdef LORAGOTCHI_RX
++  if (txt_type == TXT_TYPE_PLAIN && loragotchiRXReceive(from.id.pub_key, text)) return;
++#endif
+   int i = 0;
+   out_frame[i++] = RESP_CODE_CONTACT_MSG_RECV_V3;
+   out_frame[i++] = (int8_t)(pkt->getSNR() * 4);
+@@ -2573,6 +2584,11 @@ void MyMesh::begin(bool has_display) {
+   bootstrapRTCfromContacts();
+   addChannel("Public", PUBLIC_GROUP_PSK); // pre-configure public channel
+   _store->loadChannels(this);
++#ifdef LORAGOTCHI_RX
++  const auto channelResult = LoRagotchiChannel::ensureJoined(*this);
++  LoRagotchiChannel::startupResult = channelResult;
++  if (channelResult == LoRagotchiChannel::Result::Added) saveChannels();
++#endif
+ 
+   applyRadioFromPrefs();   // freq/bw/sf/cr + TX power + RX-boost (shared with the live UI apply)
+ #if defined(DISPLAY_CLASS)
+@@ -2642,6 +2658,12 @@ void MyMesh::startInterface(BaseSerialInterface &serial) {
+ }
+ 
+ void MyMesh::handleCmdFrame(size_t len) {
++#ifdef LORAGOTCHI_RX
++  // writeFrame is intentionally targeted. LRX fragments must never enter the
++  // unsolicited broadcast path used by ordinary companion chat.
++  const size_t rxLen = loragotchiRXCommand(cmd_frame, len, out_frame, self_id.pub_key);
++  if (rxLen) { _serial->writeFrame(out_frame, rxLen); return; }
++#endif
+   if (cmd_frame[0] == CMD_DEVICE_QUERY && len >= 2) { // sent when app establishes connection
+     app_target_ver = cmd_frame[1];                    // which version of protocol does app understand
+     char client_id[MAX_CLIENT_ID_LEN + 1];
+@@ -4634,6 +4656,9 @@ void MyMesh::checkSerialInterface() {
+ 
+ void MyMesh::loop() {
+   BaseChatMesh::loop();
++#ifdef LORAGOTCHI_RX
++  loragotchiRXTick();
++#endif
+ 
+   if (_cli_rescue) {
+     checkCLIRescueCmd();
+diff --git a/examples/companion_radio/MyMesh.h b/examples/companion_radio/MyMesh.h
+index 142f404..ec5482d 100644
+--- a/examples/companion_radio/MyMesh.h
++++ b/examples/companion_radio/MyMesh.h
+@@ -18,8 +18,12 @@
+ #endif
+ 
+ #ifndef FIRMWARE_VERSION
++#ifdef LORAGOTCHI_RX
++#define FIRMWARE_VERSION "v1.18.0.1-lrx1"
++#else
+ #define FIRMWARE_VERSION "v1.18.0.1"
+ #endif
++#endif
+ 
+ #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+ #include <InternalFileSystem.h>
+diff --git a/examples/companion_radio/main.cpp b/examples/companion_radio/main.cpp
+index 20ae304..c818209 100644
+--- a/examples/companion_radio/main.cpp
++++ b/examples/companion_radio/main.cpp
+@@ -1,6 +1,7 @@
+ #include <Arduino.h>   // needed for PlatformIO
+ #include <Mesh.h>
+ #include "MyMesh.h"
++#include "LoRagotchiRXBridge.h"
+ #if defined(ESP32_PLATFORM) && defined(HAS_TOUCH_UI)
+ #include <Preferences.h>
+ #include <esp_system.h>
+@@ -413,7 +414,16 @@ void setup() {
+     }
+   }
+ #endif
++#ifdef LORAGOTCHI_RX
++  if (!sd_storage && !spiffs_ok) {
++    // A mount failure can mean valuable receiver state, not an empty device.
++    // Fail closed; never auto-format identities, contacts or pending returns.
++    Serial.println("[LRX] storage mount failed; refusing to format");
++    while (true) delay(1000);
++  }
++#else
+   if (!sd_storage && !spiffs_ok) SPIFFS.begin(true);   // last resort: format SPIFFS
++#endif
+   Serial.printf("[BOOT] storage: %s\n", sd_storage ? "SD /meshcomod" : "SPIFFS");
+   store.begin();
+   the_mesh.begin(
+@@ -423,6 +433,9 @@ void setup() {
+         false
+     #endif
+   );
++#ifdef LORAGOTCHI_RX
++  loragotchiRXBegin();
++#endif
+   Serial.println("[BOOT] mesh ok");
+ 
+ #if defined(WIFI_SSID) || defined(MULTI_TRANSPORT_COMPANION)
+diff --git a/test/rx/check_aquarium.py b/test/rx/check_aquarium.py
+new file mode 100644
+index 0000000..e5f97c5
+--- /dev/null
++++ b/test/rx/check_aquarium.py
+@@ -0,0 +1,89 @@
++#!/usr/bin/env python3
++"""Run the actual Aquarium client/store against the production C++ RX core.
++
++Flash/radio are mocked; framed pipe I/O, fragment reads and SQLite are real.
++No installed graphics dependencies, radio access or application edits required.
++"""
++import os
++from pathlib import Path
++import select
++import subprocess
++import sys
++import tempfile
++
++root = Path(__file__).resolve().parents[2]
++aquarium = Path(sys.argv[1] if len(sys.argv) > 1 else root.parent / 'loragotchi-community-tank').resolve()
++if not (aquarium / 'tank/client.py').exists():
++    raise SystemExit('Pass the path to a LoRagotchi-Aquarium v0.1.5 checkout')
++sys.path.insert(0, str(aquarium))
++from tank.client import Client
++from tank.protocol import decode_event, encode_event
++from tank.store import Store
++from tank.transport import StreamTransport
++
++with tempfile.TemporaryDirectory(prefix='loragotchi-rx-test-') as directory:
++    temp = Path(directory)
++    def compile_fixture(name):
++        binary = temp / name
++        subprocess.run(['g++', '-std=c++17', '-I', str(root),
++                        str(root / 'test/rx' / (name + '.cpp')), '-o', str(binary)], check=True)
++        return binary
++    golden = temp / 'event.bin'
++    subprocess.run([str(compile_fixture('check_receiver')), str(golden)], check=True)
++    event = decode_event('03' + '00' * 31, golden.read_bytes())
++    assert encode_event(event) == golden.read_bytes()
++    assert (event.fish_id, event.tx_id, event.body, event.scales, event.eyes) == (8, 7, 1, 3, 5)
++    print('PASS Aquarium decodes and round-trips production snapshot bytes')
++
++    process = subprocess.Popen([str(compile_fixture('host_receiver'))],
++                               stdin=subprocess.PIPE, stdout=subprocess.PIPE)
++    class Pipe(StreamTransport):
++        def read(self):
++            if select.select([process.stdout], [], [], .1)[0]:
++                # Force partial transport frames, not just complete pipe reads.
++                return os.read(process.stdout.fileno(), 3)
++            return b''
++        def write(self, data):
++            process.stdin.write(data[:2]); process.stdin.flush()
++            process.stdin.write(data[2:]); process.stdin.flush()
++        def close(self):
++            process.stdin.close()
++    class CrashAfterSave(Store):
++        fail_once = True
++        def save(self, event):
++            result = super().save(event)
++            if self.fail_once:
++                self.fail_once = False
++                raise RuntimeError('simulated PC failure after durable save, before ACK')
++            return result
++    transport = Pipe()
++    store = CrashAfterSave(temp / 'aquarium.sqlite')
++    client = Client(transport, store, token=45)
++    try:
++        assert client.connect() == dict(capacity=4, transports=1, storage_ok=True)
++        try:
++            client.poll()
++        except RuntimeError as exc:
++            assert 'before ACK' in str(exc)
++        else:
++            raise AssertionError('save/ACK boundary was not exercised')
++        assert len(store.roster()) == 1
++        client.command(5)  # drop old lease; simulate a new PC client
++        client = Client(transport, store, token=46)
++        client.connect()
++        count = 0
++        while client.poll():
++            count += 1
++        assert count == 4 and len(store.roster()) == 2
++        assert store.db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 4
++        assert store.db.execute('SELECT COUNT(*) FROM returns WHERE status="delivery-confirmed"').fetchone()[0] == 2
++        assert all((fish.body, fish.scales, fish.eyes) == (1, 3, 5) for fish in store.roster())
++        client.poll_messages()
++        assert len(store.roster()) == 2
++        print('PASS fragmented LRX/1 handshake/read, two owners, durable replay without clones')
++        print('PASS independent return statuses keep both copies; ordinary inbox remains separate')
++    finally:
++        client.close()
++        process.wait(timeout=3)
++        store.close()
++    assert process.returncode == 0
+diff --git a/test/rx/check_journal.cpp b/test/rx/check_journal.cpp
+new file mode 100644
+index 0000000..db807de
+--- /dev/null
++++ b/test/rx/check_journal.cpp
+@@ -0,0 +1,54 @@
++#include "examples/companion_radio/LoRagotchiRXJournal.h"
++#include <cassert>
++#include <iostream>
++#include <vector>
++struct Files : lrx::JournalFiles {
++  std::vector<uint8_t> banks[2];
++  bool torn=false, badReadback=false, badWrite=false;
++  unsigned last=9;
++  bool exists(unsigned bank) override { return !banks[bank].empty(); }
++  bool read(unsigned bank, lrx::Journal& journal) override {
++    if (banks[bank].size()!=sizeof(journal)) return false;
++    memcpy(&journal,banks[bank].data(),sizeof(journal));
++    if (badReadback && bank==last) journal.magic^=1;
++    return true;
++  }
++  bool write(unsigned bank,const lrx::Journal& journal) override {
++    last=bank;
++    if (badWrite) return false;
++    const auto* bytes=reinterpret_cast<const uint8_t*>(&journal);
++    banks[bank].assign(bytes,bytes+(torn?sizeof(journal)/2:sizeof(journal)));
++    return !torn;
++  }
++};
++lrx::Journal make(uint32_t generation) {
++  lrx::Journal journal{};journal.magic=0x3158524cUL;journal.version=1;
++  journal.nextId=generation+1;journal.generation=generation;
++  journal.checksum=lrx::checksum(journal);return journal;
++}
++int main() {
++  Files files;lrx::JournalStore store(files);lrx::Journal loaded{};bool fresh=false;
++  assert(!store.load(loaded,fresh) && fresh);
++  auto a=make(1),b=make(2),c=make(3);
++  assert(store.save(a) && files.last==0);
++  files.torn=true;assert(!store.save(b) && files.last==1);
++  lrx::JournalStore reboot(files);
++  assert(reboot.load(loaded,fresh) && !fresh && loaded.generation==1);
++  files.torn=false;assert(reboot.save(b) && files.last==1);
++  files.badReadback=true;assert(!reboot.save(c) && files.last==0);
++  files.badReadback=false;files.badWrite=true;
++  assert(!reboot.save(c) && files.last==0); // never touch last verified bank 1
++  files.badWrite=false;assert(reboot.save(c) && files.last==0);
++  std::cout<<"PASS torn writes/readback failures preserve the last verified bank\n";
++  files.banks[0][0]^=1;lrx::JournalStore fallback(files);
++  assert(fallback.load(loaded,fresh) && loaded.generation==2 && !fresh);
++  files.banks[1][0]^=1;lrx::JournalStore broken(files);
++  assert(!broken.load(loaded,fresh) && !fresh);
++  std::cout<<"PASS corrupt latest falls back; both corrupt fail closed, never fresh\n";
++  files=Files{};auto old=make(UINT32_MAX-1),wrapped=make(0);
++  files.write(0,old);files.write(1,wrapped);lrx::JournalStore wrap(files);
++  assert(wrap.load(loaded,fresh) && loaded.generation==0);
++  std::cout<<"PASS bank generations compare across uint32 rollover\n";
++  wrapped.checksum^=1;assert(!wrap.save(wrapped));
++  std::cout<<"PASS invalid journal is rejected before writing\n";
++}
+diff --git a/test/rx/check_receiver.cpp b/test/rx/check_receiver.cpp
+new file mode 100644
+index 0000000..4675e09
+--- /dev/null
++++ b/test/rx/check_receiver.cpp
+@@ -0,0 +1,171 @@
++#include "examples/companion_radio/LoRagotchiRX.h"
++#include <cassert>
++#include <vector>
++#include <string>
++#include <iostream>
++#include <fstream>
++struct Fake:lrx::IO {
++  lrx::Journal saved{};bool fail=false;uint32_t hash=100,writes=0,estimate=10000;bool sendFailure=false;
++  std::vector<std::string> sent;std::vector<uint8_t> owners;
++  bool save(const lrx::Journal& j) override {++writes;if(fail)return false;saved=j;return true;}
++  bool send(const uint8_t owner[32],const char* text,uint32_t& ack,uint32_t& timeout) override {sent.emplace_back(text);owners.push_back(owner[0]);ack=++hash;timeout=estimate;return !sendFailure;}
++};
++static uint8_t owner[32]={1},other[32]={2},rx[32]={3};
++static int cases=0;
++#define PASS(s) do{++cases;std::cout<<"PASS "<<s<<"\n";}while(0)
++void intake(lrx::Receiver& r,uint8_t* key=owner,uint32_t now=0){
++  assert(r.receive(key,"LFG1|REQ|7|8|2|Pebble",now));
++  assert(r.receive(key,"LFG1|COMMIT|7|8|C|1|3|5|2016",now+1));
++}
++std::vector<uint8_t> command(lrx::Receiver& r,uint8_t op,const std::vector<uint8_t>& args={},uint32_t token=1,uint32_t now=1){
++  uint8_t in[20]={0x70,'R','X',1,op},out[80]={};memcpy(in+5,&token,4);memcpy(in+9,args.data(),args.size());
++  size_t n=r.command(in,9+args.size(),out,now,rx,1);assert(n<=20);return {out,out+n};
++}
++std::vector<uint8_t> id(uint32_t n){return {uint8_t(n),uint8_t(n>>8),uint8_t(n>>16),uint8_t(n>>24)};}
++int main(int argc,char** argv){
++  {
++    uint32_t value=123;
++    assert(lrx::parseUnsigned("4294967295",UINT32_MAX,value) && value==UINT32_MAX);
++    assert(!lrx::parseUnsigned("4294967296",UINT32_MAX,value));
++    assert(!lrx::parseUnsigned("999999999999999999999999999999999999",UINT32_MAX,value));
++    assert(!lrx::parseUnsigned("-0",3,value) && !lrx::parseUnsigned("+1",3,value));
++    assert(!lrx::parseUnsigned(" 1",3,value) && !lrx::parseUnsigned("",3,value));
++    assert(lrx::parseUnsigned("3",3,value) && value==3 && !lrx::parseUnsigned("4",3,value));
++    assert(lrx::parseUnsigned("65535",65535,value) && value==65535);
++    assert(!lrx::parseUnsigned("65536",65535,value));
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
++    r.receive(owner,"LFG1|REQ|4294967296|8|2|Overflow",0);
++    r.receive(owner,"LFG1|REQ|1|9999999999999999999999999999|2|Overflow",0);
++    assert(io.sent.empty());
++    r.receive(owner,"LFG1|REQ|4294967295|4294967295|3|Maximum",0);
++    assert(io.sent.back()=="LFG1|ACK|4294967295|4294967295");
++    PASS("CPU-width-independent unsigned limits, overflow/sign rejection and maximum-ID intake");
++  }
++  {
++    Fake io;lrx::Receiver r(io);assert(r.begin(nullptr,0));intake(r);assert(io.sent.back()=="LFG1|ARRIVED|7|8");
++    assert(r.data.slots[0].body==1 && r.data.slots[0].appearance);uint32_t eid=r.nextEvent();assert(eid);
++    auto writes=io.writes;r.receive(owner,"LFG1|COMMIT|7|8",1000);assert(r.data.slots[0].body==1 && r.nextEvent()==eid && writes==io.writes);
++    r.tick(4000);assert(io.sent.back()=="LFG1|ARRIVED|7|8");r.tick(4001);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");
++    r.receive(owner,"LFG1|COMMIT|7|8",5000);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");assert(r.data.slots[0].attempts==1);
++    assert(r.acknowledgeRadio(104));assert(r.data.slots[0].state==lrx::Delivered && r.nextEvent()==eid);
++    PASS("colour capture, short duplicate, fixed hold, late COMMIT returns without resurrection, PC-independent RETURN");
++    assert(command(r,0)[5]==0);assert(command(r,0,{},2)[5]==2);assert(command(r,0,{},2,16000)[5]==0);
++    PASS("single active consumer lease, second consumer rejected, bounded reconnect takeover");
++    auto out=command(r,4,id(eid),2,16001);assert(out[5]==0);assert(r.nextEvent()!=eid);
++    uint8_t payload[80];auto size=r.event(eid,payload);assert(size==77);
++    if(argc>1){std::ofstream f(argv[1],std::ios::binary);f.write((char*)payload,size);}
++    lrx::Receiver restarted(io);assert(restarted.begin(&io.saved,0));assert(restarted.data.slots[0].id==eid && restarted.data.slots[0].uploaded);
++    assert(restarted.nextEvent()==r.data.slots[0].statusId);
++    PASS("durable upload ACK, independent status event, stable ID and journal restart");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);r.receive(other,"LFG1|COMMIT|7|8|C|4|4|4|65535",10);
++    r.receive(other,"LFG1|RECALL|7|8",20);r.tick(21);assert(r.data.slots[0].body==1 && !r.data.slots[0].attempts);
++    r.receive(other,"LFG1|REQ|7|8|1|Same names",30);assert(r.data.slots[1].state==lrx::Reserved);
++    r.receive(owner,"LFG1|RECALL|7|8",40);r.tick(40);assert(r.data.slots[0].attempts==1 && io.owners.back()==1);
++    PASS("identity binding, colliding fish/transaction IDs across devices, early recall");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);uint32_t eid=r.nextEvent();
++    lrx::Receiver restart(io);restart.begin(&io.saved,100);restart.tick(100);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1" && restart.nextEvent()==eid);
++    for(int i=1;i<=4;i++)restart.tick(100+i*10000);assert(restart.data.slots[0].state==lrx::Unresolved && restart.data.slots[0].attempts==4);
++    lrx::Receiver reboot(io);reboot.begin(&io.saved,0);auto count=io.sent.size();reboot.tick(100000);assert(io.sent.size()==count);
++    PASS("reset during hold prioritises return, four attempts persisted, exhausted jobs never evaporate");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
++    for(uint8_t k=1;k<=4;k++){uint8_t key[32]={k};intake(r,key);}
++    uint8_t key[32]={5};r.receive(key,"LFG1|REQ|7|8|1|Fifth",10);assert(io.sent.back()=="LFG1|BUSY|7|8");
++    r.receive(key,"LFG1|COMMIT|7|8",11);assert(r.data.nextId==5);
++    PASS("four-slot bounded backlog replies BUSY, unsolicited COMMIT cannot allocate");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);
++    io.fail=true;r.receive(owner,"LFG1|COMMIT|7|8|C|1|3|5|2016",1);assert(!r.healthy() && io.sent.back()=="LFG1|ACK|7|8");
++    r.tick(1);assert(io.sent.back()=="LFG1|RETURN|7|8|C");assert(command(r,0)[5]==0 && command(r,2)[5]==3);
++    io.fail=false;r.tick(5001);assert(r.healthy());assert(command(r,2,{},1,5001)[5]==0);
++    PASS("storage failure prevents ARRIVED/export, still returns original; bounded recovery restores outbox");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);auto eid=r.nextEvent();command(r,0);io.fail=true;
++    assert(command(r,4,id(eid))[5]==3);assert(!r.data.slots[0].uploaded);io.fail=false;r.tick(1);assert(r.nextEvent()==eid);
++    PASS("failed durable ACK retains unacknowledged copy for replay");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);r.tick(30000);
++    r.receive(owner,"LFG1|COMMIT|7|8",30001);assert(!r.nextEvent());
++    r.receive(owner,"LFG1|REQ|7|8|2|Fish",40000);r.receive(owner,"LFG1|COMMIT|7|8",40001);
++    assert(r.data.slots[0].body==6 && !r.data.slots[0].appearance);
++    auto copy=io.saved;reinterpret_cast<uint8_t*>(&copy)[45]^=1;assert(!lrx::valid(copy));
++    PASS("reservation timeout, missing-colour fallback, corrupt journal detection");
++  }
++  {
++    Fake io;lrx::Receiver r(io);assert(!r.begin(nullptr,0,false));r.tick(50000);
++    r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);assert(io.sent.back()=="LFG1|BUSY|7|8" && io.writes==0);
++    PASS("corrupt existing banks fail closed without reusing event IDs or replacing recovery data");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
++    r.receive(owner,"LFG1|REQ|-1|8|2|Fish",0);r.receive(owner,"LFG1|REQ|4294967296|8|2|Fish",0);
++    assert(io.sent.empty());
++    intake(r);r.tick(4001);uint32_t hash=io.hash;assert(r.acknowledgeRadio(hash));
++    command(r,0);command(r,4,id(r.data.slots[0].id));command(r,4,id(r.data.slots[0].statusId));
++    for(uint8_t k=2;k<=4;k++){uint8_t key[32]={k};intake(r,key);}
++    uint8_t fifth[32]={5};intake(r,fifth);auto n=r.data.nextId;
++    r.receive(owner,"LFG1|COMMIT|7|8|C|1|3|5|2016",20);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1" && r.data.nextId==n);
++    PASS("malformed IDs rejected; evicted completed transaction tombstone rejects stale COMMIT");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
++    command(r,0);r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);io.fail=true;
++    r.receive(owner,"LFG1|COMMIT|7|8|C|1|3|5|2016",1);
++    auto args=id(r.data.slots[0].id);args.push_back(0);args.push_back(0);
++    assert(command(r,3,args)[5]==3);
++    io.fail=false;r.tick(5001);assert(command(r,3,args,1,5001)[5]==0);
++    PASS("READ refuses an uncommitted snapshot even when its event ID is known");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
++    assert(command(r,0,{42})[5]==1); // malformed HELLO cannot acquire a lease
++    assert(command(r,0,{},2)[5]==0);
++    assert(command(r,2,{},2,15001)[5]==1); // expiry requires HELLO
++    assert(command(r,0,{},2,15001)[5]==0);
++    assert(command(r,2,{0},2,15002)[5]==1);
++    PASS("exact extension lengths and expired lease require fresh capability handshake");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
++    const uint32_t start=UINT32_MAX-1000;
++    for(uint8_t k=1;k<=4;++k){uint8_t key[32]={k};intake(r,key,start);}
++    r.tick(start+4000);for(const auto& s:r.data.slots)assert(s.attempts==0);
++    r.tick(start+4001);for(const auto& s:r.data.slots)assert(s.attempts==1);
++    assert(io.owners[io.owners.size()-4]==1 && io.owners.back()==4);
++    PASS("all four concurrent visitors return independently across millis wrap");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
++    r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);r.receive(owner,"LFG1|RECALL|7|8",1);
++    assert(io.sent.back()=="LFG1|RETURN|7|8|C");
++    intake(r);io.fail=true;r.tick(4001);
++    assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1"); // earlier capture remains durable
++    lrx::Receiver reboot(io);reboot.begin(&io.saved,0);reboot.tick(0);
++    assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");
++    PASS("AQUARIUM1 only follows durable capture, survives restart and later save failure; cancellation is unmarked");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);io.estimate=45000;
++    r.tick(4001);const auto first=io.hash;r.tick(14001);assert(r.data.slots[0].attempts==1);
++    r.tick(49001);assert(r.data.slots[0].attempts==2 && r.acknowledgeRadio(first));
++    assert(!r.acknowledgeRadio(first));
++    PASS("estimated long-path timeout delays retries; earlier attempt ACK completes once");
++  }
++  {
++    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);assert(!r.acknowledgeRadio(0));
++    io.hash=UINT32_MAX;r.tick(4001);assert(r.acknowledgeRadio(0));
++    Fake failed;lrx::Receiver otherReceiver(failed);otherReceiver.begin(nullptr,0);intake(otherReceiver);
++    failed.hash=UINT32_MAX;failed.sendFailure=true;otherReceiver.tick(4001);
++    assert(!otherReceiver.acknowledgeRadio(0));
++    PASS("zero is a valid queued ACK hash, not an unused or failed-send entry");
++  }
++  std::cout<<cases<<" production-core scenarios passed\n";
++}
+diff --git a/test/rx/host_receiver.cpp b/test/rx/host_receiver.cpp
+new file mode 100644
+index 0000000..929edae
+--- /dev/null
++++ b/test/rx/host_receiver.cpp
+@@ -0,0 +1,28 @@
++// Pipe-driven host boundary for cross-language integration tests. This compiles
++// the production Receiver, but mocks flash/radio: never label it hardware proof.
++#include "examples/companion_radio/LoRagotchiRX.h"
++struct Backend:lrx::IO {
++  uint32_t hash=100;
++  bool save(const lrx::Journal& j) override {return lrx::valid(j);}
++  bool send(const uint8_t*,const char*,uint32_t& ack,uint32_t& timeout) override {ack=++hash;timeout=10000;return true;}
++};
++int main(){
++  Backend backend;lrx::Receiver receiver(backend);receiver.begin(nullptr,0);
++  uint8_t key[32]={1},rx[32]={3};
++  for(uint8_t i=1;i<=2;i++){
++    key[0]=i;uint32_t now=(i-1)*6000;
++    receiver.receive(key,"LFG1|REQ|7|8|2|Host fixture",now);
++    receiver.receive(key,"LFG1|COMMIT|7|8|C|1|3|5|2016",now+1);
++    receiver.tick(now+4001);receiver.acknowledgeRadio(backend.hash);
++  }
++  int lead;
++  while((lead=getchar())!=EOF){
++    if(lead!='<')continue;int lo=getchar(),hi=getchar();if(lo<0||hi<0)return 1;
++    size_t length=unsigned(lo)|(unsigned(hi)<<8);if(!length || length>176)return 2;
++    uint8_t request[176],response[176];if(fread(request,1,length,stdin)!=length)return 3;
++    size_t size;
++    if(request[0]==10){response[0]=10;size=1;}
++    else size=receiver.command(request,length,response,11000,rx,1);
++    if(!size)return 4;putchar('>');putchar(size&255);putchar(size>>8);fwrite(response,1,size,stdout);fflush(stdout);
++  }
++}
+diff --git a/variants/heltec_v4/platformio.ini b/variants/heltec_v4/platformio.ini
+index b082ca7..ebd9421 100644
+--- a/variants/heltec_v4/platformio.ini
++++ b/variants/heltec_v4/platformio.ini
+@@ -739,3 +739,10 @@ build_flags =
+   -DARDUINO_USB_MODE=1
+ build_src_filter = ${Heltec_lora32_v4.build_src_filter}
+   +<../examples/kiss_modem/>
++
++; Local LoRagotchi-RX prototype, pinned to MeshCoMod companion v1.18.0.1.
++[env:heltec_v4_companion_radio_usb_tcp_lrx]
++extends = env:heltec_v4_companion_radio_usb_tcp
++build_flags =
++  ${env:heltec_v4_companion_radio_usb_tcp.build_flags}
++  -D LORAGOTCHI_RX=1

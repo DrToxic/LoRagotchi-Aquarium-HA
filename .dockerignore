@@ -1,0 +1,10 @@
+*
+!Dockerfile
+!pyproject.toml
+!LICENSE
+!README.md
+!tank
+!tank/**
+!container
+!container/**
+**/__pycache__

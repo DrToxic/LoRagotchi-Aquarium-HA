@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LoRagotchi Aquarium</title>
+<style>html,body,#screen{width:100%;height:100%;margin:0;overflow:hidden;background:#051a22}#state{position:absolute;inset:0;display:grid;place-items:center;color:#bfd9de;font:16px system-ui;pointer-events:none}#state:empty{display:none}</style></head><body><div id="screen"></div><div id="state">Connecting…</div>
+<script type="module">
+import RFB from '../novnc/core/rfb.js';
+const mode=location.pathname.endsWith('/view/')?'view':'control';
+const endpoint=new URL('../ws/'+mode,location.href);endpoint.protocol=location.protocol==='https:'?'wss:':'ws:';
+const state=document.querySelector('#state');
+const rfb=new RFB(document.querySelector('#screen'),endpoint.href);
+rfb.scaleViewport=true;rfb.resizeSession=false;rfb.viewOnly=mode==='view';rfb.showDotCursor=mode==='control';rfb.background='#051a22';
+rfb.addEventListener('connect',()=>{state.textContent='';document.body.dataset.connected='true'});
+rfb.addEventListener('disconnect',()=>{state.textContent='Disconnected. Reload to reconnect.';document.body.dataset.connected='false'});
+rfb.addEventListener('securityfailure',()=>state.textContent='Connection rejected.');
+</script></body></html>
