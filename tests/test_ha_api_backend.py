@@ -24,6 +24,7 @@ class FakeHA:
         self.reject=False
         self.before_response=True
         self.seq=0
+        self.sun_state=None
 
     async def event(self, kind, **data):
         for ws,subscriptions in list(self.connections.items()):
@@ -48,10 +49,12 @@ class FakeHA:
                 req=json.loads(raw);kind=req['type'];result=None
                 if kind=='subscribe_events':self.connections[ws][req['id']]=req['event_type']
                 elif kind=='get_services':result=dict(meshcore=dict(send_message={},get_contacts={}))
+                elif kind=='get_config':result=dict(time_zone='Europe/London')
                 elif kind=='config/entity_registry/list':
                     result=[dict(entity_id='sensor.renamed',platform='meshcore',config_entry_id='entry')]
                 elif kind=='get_states':
                     result=[dict(entity_id='sensor.renamed',state='A1' if self.online else 'unavailable',attributes=dict(public_key=self.key,path_hash_mode=0,prefix_length='1 byte',friendly_name='Fish Node'))]
+                    if self.sun_state:result.append(self.sun_state)
                 elif kind=='call_service':
                     self.calls.append(req)
                     assert req['domain']=='meshcore'

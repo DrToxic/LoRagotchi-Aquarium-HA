@@ -1,5 +1,5 @@
 name: LoRagotchi Aquarium Preview
-version: "0.3.0-preview.5"
+version: "0.3.0-preview.6"
 slug: loragotchi_aquarium
 description: Native LoRagotchi aquarium configured and viewed through Home Assistant
 url: https://github.com/DrToxic/LoRagotchi-Aquarium-HA
@@ -44,6 +44,42 @@ options:
   radio_host: ""
   radio_port: 5000
   radio_control: false
+  appearance:
+    mode: "static"
+    timezone: "ha"
+    day_start: "07:00"
+    night_start: "19:00"
+    transition_minutes: 60.0
+    brightness: 1.0
+    day_brightness: 1.0
+    night_brightness: 0.2
+    day_colour: "#ffffff"
+    night_colour: "#709acb"
+    ambient_strength: 1.0
+    surface_strength: 1.0
+    fill_strength: 1.0
+    surface_heading: -35.0
+    surface_elevation: 65.0
+    background_style: "classic"
+    background_top: "#0f4754"
+    background_bottom: "#04111a"
+    fog_enabled: true
+    fog_colour: "classic"
+    fog_density: 0.012
+    sand_tint: "#ffffff"
+    caustics_strength: 1.0
+    caustics_speed: 1.0
+    shafts: "preset"
+    shafts_strength: 1.0
+    plant_sway: 1.0
+    plant_speed: 1.0
+    column_count: 0
+    column_placement: "mixed"
+    column_seed: 17
+    column_particles: 60
+    column_width: 0.2
+    column_size: 1.0
+    column_speed: 1.0
 schema:
   mode: list(demo|home_assistant|live)
   ha_entry_id: str
@@ -78,3 +114,39 @@ schema:
   radio_host: str
   radio_port: port
   radio_control: bool
+  appearance:
+    mode: list(static|clock|ha_sun)?
+    timezone: str?
+    day_start: str?
+    night_start: str?
+    transition_minutes: float(0,180)?
+    brightness: float(0,2)?
+    day_brightness: float(0,2)?
+    night_brightness: float(0,2)?
+    day_colour: str?
+    night_colour: str?
+    ambient_strength: float(0,2)?
+    surface_strength: float(0,2)?
+    fill_strength: float(0,2)?
+    surface_heading: float(-180,180)?
+    surface_elevation: float(0,90)?
+    background_style: list(classic|solid|gradient)?
+    background_top: str?
+    background_bottom: str?
+    fog_enabled: bool?
+    fog_colour: str?
+    fog_density: float(0,0.1)?
+    sand_tint: str?
+    caustics_strength: float(0,2)?
+    caustics_speed: float(0,3)?
+    shafts: list(preset|on|off)?
+    shafts_strength: float(0,2)?
+    plant_sway: float(0,3)?
+    plant_speed: float(0,3)?
+    column_count: int(0,16)?
+    column_placement: list(floor|shelves|mixed)?
+    column_seed: int(0,2147483647)?
+    column_particles: int(1,300)?
+    column_width: float(0.05,0.8)?
+    column_size: float(0.25,3)?
+    column_speed: float(0.1,3)?

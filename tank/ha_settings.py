@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 from .settings import Settings, PRESETS
+from .appearance import Appearance
 
 
 def boolean(value, name):
@@ -53,4 +54,7 @@ def render_settings(options):
             raise ValueError(f'Unknown {name} selection')
         values.update({key: boolean(value, f'{name}.{key}') for key, value in supplied.items()})
         setattr(settings, name, values)
+    appearance=options.get('appearance', {})
+    if not isinstance(appearance,dict):raise ValueError('appearance must be an object')
+    settings.appearance=Appearance.from_dict({'timezone':'ha',**appearance})
     return settings

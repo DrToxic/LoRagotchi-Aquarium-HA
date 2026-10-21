@@ -22,7 +22,7 @@ EVENTS = ('meshcore_message', 'meshcore_message_sent', 'meshcore_connected',
 class Backend:
     PACE = 2
     RECONNECT = 5
-    def __init__(self, store, url, token, entry='', receive=False):
+    def __init__(self, store, url, token, entry='', receive=False, environment_file=None):
         self.store, self.url, self.token = store, url, token
         self.requested_entry, self.receive = entry, receive
         self.receiver = self.api = self.companion = None
@@ -32,12 +32,15 @@ class Backend:
         self.available = []
         self.last_message = 'No fish protocol messages received'
         self.next_send = 0
+        from .ha_environment import EnvironmentPublisher
+        self.environment = EnvironmentPublisher(environment_file) if environment_file else None
 
     def report(self, text, online=False):
         if (self.status, self.online) != (text, online): LOG.info('%s', text)
         self.status, self.online = text, online
 
     def event(self, event):
+        if self.environment and self.environment.event(event):return
         # Ordinary mesh chat never consumes the bounded protocol inbox.
         if event.get('event_type') == 'meshcore_message':
             data = event.get('data', {})
@@ -130,8 +133,10 @@ class Backend:
     async def run(self):
         while True:
             self.api = HAClient(self.url, self.token, self.event)
+            environment_task = None
             try:
                 await self.api.open()
+                if self.environment:environment_task=asyncio.create_task(self.environment.watch(self.api))
                 for event_type in EVENTS: await self.api.request('subscribe_events', event_type=event_type)
                 await self.discover()
                 checked = time.monotonic()
@@ -155,6 +160,10 @@ class Backend:
                 self.report(f'HA backend unavailable ({type(exc).__name__}); retrying in 5s')
             finally:
                 self.online = False
+                if environment_task:
+                    environment_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):await environment_task
+                    self.environment.offline()
                 await self.api.close()
                 while not self.events.empty(): self.events.get_nowait()
             await asyncio.sleep(self.RECONNECT)
@@ -196,7 +205,7 @@ async def serve(args, token):
     lock = open(str(args.database) + '.ha.lock', 'a')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     store = Store(args.database, args.session)
-    backend = Backend(store, args.url, token, args.entry, args.receive)
+    backend = Backend(store, args.url, token, args.entry, args.receive, getattr(args,"environment_file",None))
     socket_path = Path(args.socket)
     socket_path.parent.mkdir(parents=True, exist_ok=True)
     if socket_path.exists(): socket_path.unlink()  # stale private socket after a crash, lock acquired
@@ -225,6 +234,7 @@ def main():
     parser.add_argument('--entry', default='')
     parser.add_argument('--receive', action='store_true')
     parser.add_argument('--token-file', type=Path)
+    parser.add_argument('--environment-file', type=Path)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
     # No tokens on argv, IPC, browser pages, data snapshots or disk-generated configs.

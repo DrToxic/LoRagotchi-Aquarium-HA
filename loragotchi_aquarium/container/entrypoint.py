@@ -87,12 +87,15 @@ def main():
     w,h=cfg['width'],cfg['height']
     app=[sys.executable,'-m','tank','--stream-layout','--width',str(w),'--height',str(h),
          '--fps',str(cfg['fps']),'--no-vsync','--settings','/data/config/loragotchi-tank/settings.json']
+    needs_environment=False
     if cfg['ha']:
         from tank.ha_settings import render_settings
         # Keep the dedicated-RX client identity in its existing sibling file.
         # Never overwrite the former desktop settings.json (rollback).
         settings_path=Path('/data/config/loragotchi-tank/ha-render-settings.json')
-        render_settings(cfg['options']).save(settings_path)
+        profile=render_settings(cfg['options']);profile.save(settings_path)
+        needs_environment=(profile.appearance.mode=='ha_sun' or
+                           (profile.appearance.mode=='clock' and profile.appearance.timezone=='ha'))
         app=[sys.executable,'-m','tank','--managed-settings','--width',str(w),'--height',str(h),
              '--settings',str(settings_path)]
     presentation_path=Path('/opt/stream/web/presentation.json')
@@ -114,7 +117,17 @@ def main():
         if not re.fullmatch(r'[A-Za-z0-9.:-]+',cfg['host']): raise ValueError('Set radio_host to the MeshCoMod RX hostname or IP, without URL or credentials')
         app+=['--connect',f'meshcore:{cfg["host"]}:{cfg["port"]}']
         if cfg['control']: app+=['--radio-control']
-    children=[];backend=None;stopping=False
+    environment_command=None
+    if needs_environment:
+        environment_file='/run/aquarium/environment.json'
+        app+=['--environment-file',environment_file]
+        if backend_command:
+            backend_command+=['--environment-file',environment_file]
+        else:
+            environment_command=[sys.executable,'-m','tank.ha_environment','--url',cfg['url'],
+                                 '--output',environment_file]
+            if not cfg['ha']:environment_command+=['--token-file',cfg['token_file']]
+    children=[];backend=None;environment=None;stopping=False
     def shutdown(*_):
         nonlocal stopping
         stopping=True
@@ -141,7 +154,7 @@ def main():
         start(['nginx','-c','/run/aquarium-nginx.conf','-g','daemon off;'])
         print('Aquarium stream ready: /view/ (server-enforced read-only); '+
               ('settings in Home Assistant Configuration' if cfg['ha'] else '/control/ (operator)'),flush=True)
-    retry_display=retry_backend=0
+    retry_display=retry_backend=retry_environment=0
     try:
         while not stopping:
             now=time.monotonic()
@@ -149,6 +162,9 @@ def main():
                 backend=subprocess.Popen(backend_command)
                 retry_backend=now+5
                 print('HA receiver started independently of the display stack',flush=True)
+            if environment_command and (environment is None or environment.poll() is not None) and now>=retry_environment:
+                environment=subprocess.Popen(environment_command)
+                retry_environment=now+5
             if children and any(p.poll() is not None for p in children):
                 print('Display component exited; restarting presentation. HA receiver remains running.',flush=True)
                 stop_processes(children);children.clear();retry_display=now+3
@@ -162,5 +178,6 @@ def main():
         # An intentional app stop stops intake too. Persisted jobs recover on restart.
         stop_processes(children)
         if backend is not None: stop_processes([backend])
+        if environment is not None: stop_processes([environment])
 
 if __name__=='__main__':main()

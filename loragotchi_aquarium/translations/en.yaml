@@ -90,3 +90,112 @@ configuration:
   radio_control:
     name: Legacy radio write permission
     description: Retained for existing configurations. No radio configuration UI is exposed by this add-on. Use MeshCore or MeshCore Chat for radio settings.
+  appearance:
+    name: Appearance, day/night and bubble columns
+    description: Save and restart to apply. Automatic lighting then runs continuously. Performance settings stay separate.
+    fields:
+      mode:
+        name: "Lighting mode"
+        description: "Static, clock schedule, or Home Assistant sun elevation. Sun unavailable falls back to the schedule."
+      timezone:
+        name: "Timezone"
+        description: "ha uses Home Assistant timezone; or enter an IANA zone such as Europe/London. Missing HA timezone falls back to UTC with a log notice."
+      day_start:
+        name: "Day starts"
+        description: "24-hour HH:MM. Dawn fade begins here. Overnight schedules are supported."
+      night_start:
+        name: "Night starts"
+        description: "24-hour HH:MM. Dusk fade begins here."
+      transition_minutes:
+        name: "Fade minutes"
+        description: "Clock fade duration; clamped to fit short day/night intervals."
+      brightness:
+        name: "Overall brightness"
+        description: "Overall multiplier, 0–2. Zero deliberately blacks out the scene, not name labels."
+      day_brightness:
+        name: "Day brightness"
+        description: "Daylight multiplier, also used by static mode."
+      night_brightness:
+        name: "Night brightness"
+        description: "Night multiplier. Default 0.2 keeps fish visible; zero permits blackout."
+      day_colour:
+        name: "Day tint"
+        description: "RGB tint in #RRGGBB; white preserves original fish colours."
+      night_colour:
+        name: "Night tint"
+        description: "Night RGB tint in #RRGGBB; received fish data is unchanged."
+      ambient_strength:
+        name: "Ambient fill"
+        description: "Ambient fill."
+      surface_strength:
+        name: "Surface light"
+        description: "Surface light."
+      fill_strength:
+        name: "Side fill"
+        description: "Side fill."
+      surface_heading:
+        name: "Light heading"
+        description: "Light heading."
+      surface_elevation:
+        name: "Light elevation"
+        description: "Light elevation."
+      background_style:
+        name: "Background"
+        description: "Classic preserves the exact original gradient. Solid uses top colour; gradient uses both colours."
+      background_top:
+        name: "Top / solid colour"
+        description: "Upper gradient or solid colour in #RRGGBB."
+      background_bottom:
+        name: "Bottom colour"
+        description: "Lower gradient colour in #RRGGBB."
+      fog_enabled:
+        name: "Water fog"
+        description: "Water fog."
+      fog_colour:
+        name: "Fog colour"
+        description: "Use classic for original water colour, or #RRGGBB."
+      fog_density:
+        name: "Fog density"
+        description: "Water depth haze density, 0–0.1; original 0.012."
+      sand_tint:
+        name: "Sand tint"
+        description: "Multiply floor and shelf sand by #RRGGBB. White retains the original texture."
+      caustics_strength:
+        name: "Caustic strength"
+        description: "Pattern opacity; requires the Caustics graphics option."
+      caustics_speed:
+        name: "Caustic speed"
+        description: "Water-pattern speed multiplier; zero freezes movement."
+      shafts:
+        name: "Light shafts"
+        description: "preset follows Caustics; on/off controls light shafts separately."
+      shafts_strength:
+        name: "Shaft strength"
+        description: "Shaft strength."
+      plant_sway:
+        name: "Plant sway"
+        description: "Plant sway multiplier; 0 disables this effect."
+      plant_speed:
+        name: "Sway speed"
+        description: "Sway speed multiplier; 0 disables this effect."
+      column_count:
+        name: "Column count"
+        description: "Requested columns (0–16). Zero disables columns, not ambient bubbles. Invalid sites are skipped."
+      column_placement:
+        name: "Placement"
+        description: "Floor, generated shelves, or mixed. HA has no stacked-window shelves, so shelves-only places zero columns."
+      column_seed:
+        name: "Position seed"
+        description: "Stable random position seed; change to reroll on Save + Restart."
+      column_particles:
+        name: "Total column bubbles"
+        description: "Total column bubble pool (1–300), NOT per column. At most 100 ambient bubbles are additional."
+      column_width:
+        name: "Column spread"
+        description: "Lateral spread in world units; clearance checks avoid solid objects."
+      column_size:
+        name: "Bubble size"
+        description: "Bubble size multiplier."
+      column_speed:
+        name: "Rise speed"
+        description: "Bubble rise speed multiplier."

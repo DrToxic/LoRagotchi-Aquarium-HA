@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0-preview.6
+
+- Added HA-owned appearance options: light strengths, clock/HA-sun day/night,
+  water backgrounds/fog, sand tint, light shafts, caustics and plant motion.
+- Stable floor/shelf/mixed bubble columns use a bounded total pool. HA has no
+  shelves; floor or mixed placement is appropriate. Default columns: zero.
+- HA sun/timezone observation is read-only and isolated from presentation;
+  missing/stale state falls back to a documented clock schedule.
+- Classic/static defaults retained; no native controls added to HA. Manual
+  configuration still uses Save + Restart; cycles run without further restarts.
+- Versioned field-level settings validation and preservation of malformed files.
+  No fish database, firmware or radio protocol changes.
+
 ## 0.3.0-preview.5
 
 - The HA Web UI and default ingress URL now open directly to the aquarium:

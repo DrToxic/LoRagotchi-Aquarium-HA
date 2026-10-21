@@ -1,4 +1,4 @@
-# Home Assistant preview 5
+# Home Assistant preview 6
 
 The **same Python/Panda3D application** is rendered once in a container and
 streamed through noVNC. There is no second graphics implementation. The default
@@ -13,6 +13,29 @@ provided; actual Supervisor installation and physical radio coexistence must be
 checked on the owner's hardware. ARM64/Pi images are not claimed or published.
 No HACS component is automatically installed or replaced, and no radio is
 automatically flashed. Optional dashboard embedding uses a separate HACS card.
+
+## Preview 6: appearance and bubble columns
+
+The nested **appearance** options expose static/clock/HA-sun lighting, day/night
+brightness and tint, smooth fades, solid/gradient backgrounds, fog and sand tint,
+caustics/shafts/plant motion, and stable floor bubble columns. Manual edits still
+require Save + Restart; the chosen cycle then runs automatically. Classic/static
+and zero columns remain defaults. Begin with 2–3 columns and 60 total bubbles.
+
+`column_particles` is the **total** pool (1–300), not per column; `column_count`
+is 0–16. Change `column_seed` to reshuffle. This single-view HA app has no shelves;
+choose `floor` or `mixed`. Shelves-only produces zero columns.
+
+`mode: ha_sun` reads `sun.sun` elevation (night at −6°, day at +6°) and HA timezone
+through the authenticated backend. Demo/direct-RX use a read-only state observer.
+The renderer gets no token. Missing/stale sun falls back to the configured clock
+schedule; unknown HA timezone temporarily uses UTC, with a diagnostic in Logs.
+Day/night times are 24-hour HH:MM; colours are #RRGGBB. Fade starts at each chosen
+time. Static uses day brightness/tint; zero brightness intentionally blacks out.
+
+All graphics overrides remain separate. Theme packs, new fish styles/reef art,
+image backgrounds and desktop deadzone-layout additions are not included yet.
+Fish data and protocol are unchanged.
 
 ## Try without a radio
 

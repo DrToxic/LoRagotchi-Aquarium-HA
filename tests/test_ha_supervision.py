@@ -2,13 +2,15 @@
 from types import SimpleNamespace
 from pathlib import Path
 import importlib.util
+import pytest
 
 
-def test_display_restart_preserves_backend_and_does_not_inherit_token(tmp_path,monkeypatch):
+@pytest.mark.parametrize('source_mode,lighting_mode',[('home_assistant','static'),('home_assistant','ha_sun'),('demo','ha_sun'),('live','ha_sun')])
+def test_display_restart_preserves_backend_and_does_not_inherit_token(tmp_path,monkeypatch,source_mode,lighting_mode):
     spec=importlib.util.spec_from_file_location('aquarium_entrypoint',Path(__file__).parents[1]/'container/entrypoint.py')
     entry=importlib.util.module_from_spec(spec);spec.loader.exec_module(entry)
     monkeypatch.setenv('SUPERVISOR_TOKEN','private-fixture-token')
-    monkeypatch.setattr(entry,'configuration',lambda:dict(ha=True,options={},mode='home_assistant',width=960,height=540,fps=20,entry='',receive=True,url='ws://supervisor/core/websocket',token_file=''))
+    monkeypatch.setattr(entry,'configuration',lambda:dict(ha=True,options={'appearance':{'mode':lighting_mode}},mode=source_mode,fish=6,host='localhost',port=5000,control=False,width=960,height=540,fps=20,entry='',receive=True,url='ws://supervisor/core/websocket',token_file=''))
     monkeypatch.setattr(entry,'nginx_config',lambda ha:'fixture config')
     monkeypatch.setattr(entry,'Path',lambda value:tmp_path/str(value).lstrip('/').replace('/','_'))
     handlers={}
@@ -36,13 +38,19 @@ def test_display_restart_preserves_backend_and_does_not_inherit_token(tmp_path,m
         def wait(self,timeout=None):return self.returncode
     monkeypatch.setattr(entry.subprocess,'Popen',Proc)
     entry.main()
-    assert len([p for p in starts if p.is_backend])==1
+    assert len([p for p in starts if p.is_backend])==int(source_mode=='home_assistant')
     assert len([p for p in starts if p.is_renderer])==2
-    backend=next(p for p in starts if p.is_backend)
-    assert backend.env is None  # Receives the injected token in its private environment.
-    assert all('SUPERVISOR_TOKEN' not in p.env for p in starts if not p.is_backend)
+    observers=[p for p in starts if 'tank.ha_environment' in p.command]
+    assert len(observers)==int(source_mode!='home_assistant' and lighting_mode=='ha_sun')
+    for proc in starts:
+        if proc.is_backend or proc in observers:assert proc.env is None
+        else:assert 'SUPERVISOR_TOKEN' not in proc.env
     renderer=next(p for p in starts if p.is_renderer)
     assert '--managed-settings' in renderer.command
+    assert ('--environment-file' in renderer.command)==(lighting_mode=='ha_sun')
+    if lighting_mode=='ha_sun':
+        publisher=next(p for p in starts if p.is_backend or p in observers)
+        assert '/run/aquarium/environment.json' in publisher.command
     settings=renderer.command[renderer.command.index('--settings')+1]
     assert settings.endswith('data_config_loragotchi-tank_ha-render-settings.json')
     assert not any('127.0.0.1:9002' in p.command or '5902' in p.command for p in starts)

@@ -7,6 +7,13 @@ Aquarium runs in a container and streams to your browser. There is no separate
 browser renderer. All add-on settings live in Home Assistant’s Configuration
 tab; the native display has no operator window or deadzones.
 
+## Preview 6 appearance controls
+
+Lighting, automatic day/night (clock or HA sun), water backgrounds/fog, sand tint,
+effect motion and stable pooled bubble columns are now configurable in HA.
+Manual changes use Save + Restart; automatic cycles then run continuously.
+See [Appearance](docs/APPEARANCE.md) and [HA setup](docs/HOME_ASSISTANT.md).
+
 ## Install on Home Assistant OS
 
 1. Open **Settings → Apps/Add-ons → Store → ⋮ → Repositories**.
