@@ -21,6 +21,7 @@ class Settings:
     fps:int=45
     vsync:bool=True
     chat_bubbles:bool=True
+    show_names:bool=False
     decorations:dict=field(default_factory=dict)
     fish_animations:bool=True
     exit_styles:dict=field(default_factory=dict)

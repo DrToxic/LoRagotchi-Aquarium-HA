@@ -1,11 +1,12 @@
-# Home Assistant preview 3
+# Home Assistant preview 4
 
 The **same Python/Panda3D application** is rendered once in a container and
 streamed through noVNC. There is no second graphics implementation. `/view/`
-is aquarium-only and **server-enforced view-only**; `/control/` is the full
-operator desktop. Multiple viewers share one running application and collection.
-Closing a browser does not stop intake. Operators share controls; this is not
-per-user desktop isolation.
+is aquarium-only and **server-enforced view-only**. On HAOS, all settings are
+managed in the add-on Configuration tab; there is no operator window or deadzone
+feature. The old `/control/` route is a read-only compatibility alias. Multiple
+viewers share one running application and collection. Closing a browser does not
+stop intake. Standalone Docker retains its desktop operator interface.
 
 This preview targets **amd64 Linux**. HAOS and HA Container packaging are
 provided; actual Supervisor installation and physical radio coexistence must be
@@ -44,13 +45,44 @@ Extract `loragotchi_aquarium/` into Home Assistant's `addons` share (usually
 `/addons/loragotchi_aquarium` from the SSH app). In Settings → Apps/Add-ons →
 Store, refresh/check for updates, open **LoRagotchi Aquarium Preview** under
 Local apps, and install. Leave `mode: demo`, then start and open the Web UI.
-Select **View aquarium** or **Open controls**. This preview is admin-only.
+Select **View aquarium**. This preview is admin-only.
 
 Supervisor supplies authentication and ingress; port 8099 is not published.
 Only its standard ingress proxy (`172.30.32.2`) is accepted by the container.
 The UI and WebSockets use relative paths so ingress's session path is preserved.
 Use **Web UI → Dashboard cards** for ingress-aware Lovelace configurations, as
 described below. Do not paste a temporary ingress URL into a dashboard.
+
+## Settings in Home Assistant
+
+Open **Settings → Apps/Add-ons → LoRagotchi Aquarium → Configuration**.
+Change the options, **Save**, then **Restart**. The running add-on does not hot
+reload options. Use **Show unused optional configuration options** (or Edit in
+YAML) for per-setting graphics overrides. Omit an override to inherit its preset.
+
+| Options | Purpose |
+| --- | --- |
+| `mode`, `ha_entry_id`, `ha_receive_fish` | Demo, shared HA receiver, or dedicated RX connection; intake defaults off. |
+| `demo_fish` | Synthetic visitor count in demo mode, 0–256. |
+| `width`, `height`, `fps` | Output size and 10–60 FPS limit. FPS overrides the preset. |
+| `graphics_preset` | `compatibility`, `low`, `balanced`, `high`, or `ultra`. |
+| `render_scale`, `detail`, `plants`, `bubbles` | Optional overrides: 0.25–2, 8–48, 0–100 and 0–100 respectively. |
+| `lighting`, `caustics` | Optional boolean overrides for scene lighting and animated water lighting. |
+| `vsync` | Defaults off for the virtual display. |
+| `show_names`, `chat_bubbles` | Fish labels; channel bubbles in dedicated RX mode only. HA mode leaves chat in MeshCore Chat. |
+| `fish_animations` | Arrival/update/departure animation master switch. |
+| `exit_styles` | Individual `shark`, `net`, `bag`, `bowl`, `cage` toggles; all off means swim-up exits. |
+| `decorations` | Individual `anchor`, `clay-pots`, `pirate-ship`, `stone-arch`, `treasure-chest` toggles. |
+| `radio_host`, `radio_port` | Legacy dedicated RX host/port, unused in HA mode. |
+| `radio_control` | Compatibility option retained for existing installs; no radio configuration interface is exposed. |
+
+On upgrade, existing HA connection/output options and fish databases are kept.
+The former in-app visual settings are **not imported**: the HA preset and option
+values become authoritative. Reapply any customized visuals here. Old settings
+and display-layout files remain on disk for rollback, but cannot override HA
+options or apply deadzones, blackout masks, inversion, or extra windows.
+Fullscreen belongs to your browser/dashboard. Node RF settings, contacts and
+chat stay in MeshCore / MeshCore Chat. Connection diagnostics are in **Logs**.
 
 ## Lovelace dashboard cards
 
@@ -79,20 +111,11 @@ url: YOURPREFIX_loragotchi_aquarium/view/
 aspect_ratio: "56.25%"
 ```
 
-Optional full operator desktop:
-
-```yaml
-type: custom:addon-iframe-card
-title: Aquarium controls
-url: YOURPREFIX_loragotchi_aquarium/control/
-aspect_ratio: "53.63%"
-```
-
-These ratios match the default 960×540 scene and 1432×768 operator desktop.
-Change the ratio if you change the render size. Use a wide section or a panel
-view for the operator card. All viewers share one aquarium and collection;
-multiple operator cards share the same controls. The view-only endpoint rejects
-input at the server, but is not a separate guest-access permission model.
+The default aspect ratio is 960×540 (56.25%). The setup page generates the ratio
+for your currently running output size. Regenerate the YAML after changing
+width/height. Old `/control/` cards still connect, but now show the same read-only
+aquarium; update their ratio to match. All cards share one aquarium and collection.
+View-only is not a separate guest-access permission model.
 
 This route requires **HAOS/Supervisor and an HA administrator account**. A plain
 Webpage card cannot renew Supervisor ingress authentication by itself. Do not
@@ -102,12 +125,13 @@ port, long-lived token, or changes to MeshCore/Chat are needed for these cards.
 If HA says `Custom element doesn't exist: addon-iframe-card`, check the HACS
 installation/resource and reload the browser. If add-on lookup fails, verify
 the complete slug and administrator login. If the aquarium says Disconnected
-after an app restart, reload the dashboard. Preview 3 retains the existing
+after an app restart, reload the dashboard. Preview 4 retains the existing
 stream reconnect behavior; the setup page does not add transparent VNC recovery.
 
 The setup page is checked locally in Chromium at root and nested ingress-style
-paths, including clipboard fallback. Actual Lovelace, HA Companion apps and
-Supervisor session renewal still require a test on the installed HA host.
+paths, including clipboard fallback. The owner confirmed preview-3 Lovelace
+embedding works. HA Companion apps and long-lived Supervisor session renewal
+are not exhaustively tested.
 
 ### Could the Aquarium become a HACS integration?
 
@@ -120,7 +144,7 @@ A **hybrid** is the practical extension: retain the app/container for rendering,
 SQLite and durable fish returns; add a HACS companion integration/card for
 entities, status, actions and a polished dashboard. This would need a supported,
 authenticated backend API and integration lifecycle work; it is not implemented
-in preview 3. The generic ingress card above already handles visual embedding.
+in preview 4. The generic ingress card above already handles visual embedding.
 
 A **HACS-only** product without a separate runtime is possible only with a
 substantial redesign, such as a browser renderer plus a properly asynchronous
@@ -157,7 +181,7 @@ the package doesn't alter Caddy, DNS, firewall or HA configuration.
 sole owner of the radio connection; MeshCore Chat stays installed and unchanged.
 Aquarium listens for ordinary `LFG1` direct messages through HA's supported API
 and runs the fish receiver in its own headless process. It never opens a radio
-socket in this mode. The native aquarium renderer and assets are unchanged.
+socket in this mode. It uses the shared native aquarium graphics and assets.
 
 The supported contract was reviewed against **meshcore-ha 3.0.3**
 (`meshcore-dev/meshcore-ha`). Older integrations without `get_contacts`, stable
@@ -175,8 +199,8 @@ ha_entry_id: ""
 ha_receive_fish: false
 ```
 
-Open **Controls → Radio → Connection**. It should show **HA MeshCore connected ·
-read-only diagnostics**, the companion key prefix and entry ID. A single
+Open the add-on **Logs** tab. It should show **HA MeshCore connected ·
+read-only diagnostics**, the companion key and entry ID. A single
 MeshCore companion is selected automatically. If multiple companions exist,
 the status/log lists entry IDs: copy the intended one into `ha_entry_id` and
 restart. The Companion Prefix sensor must be enabled and available; entity
@@ -189,7 +213,7 @@ passed to the renderer/browser, logged, or saved in the application database.
 
 ### Enable fish visits
 
-After the displayed node is correct, set **`ha_receive_fish: true`** and restart.
+After the logged node identity is correct, set **`ha_receive_fish: true`** and restart.
 That permits only the receiver's automated `ACK`, `BUSY`, `ARRIVED` and `RETURN`
 DM replies. Chat, contacts and all radio settings remain in MeshCore/Chat.
 
@@ -211,8 +235,10 @@ DM replies. Chat, contacts and all radio settings remain in MeshCore/Chat.
   Return timing also respects pending HA send outcomes; four seconds is not a
   radio-delivery guarantee. Cancellation before capture uses `CANCEL1` and
   never claims a successful aquarium copy.
-- Return jobs survive restart. The panel shows pending/unresolved counts and
-  **Retry unresolved returns** re-arms exhausted return jobs only. Automatic
+- Return jobs survive restart. The Logs tab reports pending/unresolved counts.
+  Manual operator actions (retry returns, remove a fish, clear the collection)
+  are not configuration settings and are no longer exposed by the HA add-on;
+  restart never clears copies or re-arms exhausted jobs. Automatic
   send attempts are bounded at four; a call with no conclusive delivery event
   waits up to five minutes before paced retry. HA traffic policy is not bypassed.
 - A radio ACK means **radio-delivery confirmed**, not application-level HOME
@@ -230,7 +256,7 @@ DM replies. Chat, contacts and all radio settings remain in MeshCore/Chat.
   operation. Chat can display the LFG1 exchanges as ordinary DMs.
 - Tombstones are retained to prevent stale COMMITs from recreating visits.
   New reservations stop at 10,000 retained transaction records per database;
-  `journal-full` appears in the log/panel. Do not delete the journal while returns
+  `journal-full` appears in the log. Do not delete the journal while returns
   are pending. Automatic archival is deliberately not included in this preview.
 
 ### HA Container authentication
@@ -280,8 +306,11 @@ in that optional mode do not require HA or the renderer to stay running.
   identity pin, reservations, tombstones and durable reply/return jobs.
 - `/data/share/loragotchi-tank/live.sqlite` retains the separate direct-RX
   collection/chat. Preview 2 does not silently merge or delete either source.
-- `/data/config/loragotchi-tank/` holds graphics settings, layout and connection
-  preferences, including the non-secret stable client ID.
+- `/data/options.json` supplies the HA settings; the complete render profile is
+  regenerated in `/run/aquarium-settings.json` each startup.
+- `/data/config/loragotchi-tank/` retains legacy graphics/layout preferences for
+  rollback and the dedicated-RX non-secret stable client ID. HA ignores its
+  saved visual preferences and deadzones.
 - Demo is memory-only and does not contaminate the live collection.
 - Stop the app/container before taking a plain file backup of `/data`; include
   SQLite sidecars if any. HA app backup includes its data directory.
@@ -298,14 +327,11 @@ in that optional mode do not require HA or the renderer to stay running.
 
 ## Scope and practical limits
 
-Default render size is 960×540 at a 20 FPS cap. Both streams show that same
-rendering; the operator desktop is 1432×768. Hosted mode has one fixed output;
-fullscreen, extra windows and drag/resize remain desktop-only features. Fish,
-scenery, graphics presets, chat, radio tabs and masks use the existing native UI.
-A browser cannot access arbitrary host paths or local hardware as the desktop
-can; package assets and mounted data are available. BLE/USB forwarding is not
-configured in this network-first container preview. Mobile input/clipboard may
-need additional work; viewing is the primary touch use case.
+Default render size is 960×540 at a 20 FPS cap. HAOS runs one aquarium window
+and one read-only stream; the old controls route is an alias. Fullscreen belongs
+to the browser. Settings are in HA, and extra windows/deadzones are unavailable.
+Standalone Docker retains the 1432×768 desktop operator presentation. BLE/USB
+forwarding is not configured in this network-first container preview.
 
 Xvfb/Mesa currently use software rendering (two worker threads). LAN latency
 isn't the only cost: host rendering/encoding and image bandwidth matter. Frame
@@ -319,7 +345,7 @@ stopped by a display restart. Backend failure is retried separately; accepted
 work resumes from the journal. The entire container/HA stopping still interrupts
 processing, and the HTTP health check describes presentation health only.
 Basic aggregate HA sensors/automations, a bundled custom card, ARM builds,
-registry publishing and OTA firmware updates are **not part of preview 3**.
+registry publishing and OTA firmware updates are **not part of preview 4**.
 Lovelace embedding uses the separate HACS Ingress webpage card described above.
 
 

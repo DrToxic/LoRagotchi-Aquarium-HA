@@ -18,12 +18,13 @@ textarea{resize:vertical;line-height:1.5;min-height:8rem}label{display:block;mar
 <body><main>
 <section id="home">
 <h1>LoRagotchi Aquarium</h1><p>The native aquarium, here in your browser.</p>
-<nav aria-label="Aquarium"><a href="view/">View aquarium <small>— display only</small></a><a href="control/">Open controls <small>— full operator desktop</small></a><a href="#cards">Dashboard cards <small>— add Aquarium to Lovelace</small></a></nav>
+<nav aria-label="Aquarium"><a href="view/">View aquarium <small>— display only</small></a><a class="legacy-controls" href="control/" hidden>Open controls <small>— full operator desktop</small></a><a href="#cards">Dashboard cards <small>— add Aquarium to Lovelace</small></a></nav>
+<p class="managed-only" hidden>Manage aquarium settings in <strong>Home Assistant → Settings → Apps/Add-ons → LoRagotchi Aquarium → Configuration</strong>. Save, then restart the add-on to apply.</p>
 </section>
 <section id="cards" hidden>
 <a href="#">← Back to Aquarium</a>
 <h1 style="margin-top:1.5rem">Dashboard cards</h1>
-<p>Add the live aquarium or operator controls to your Home Assistant dashboard. Both show this same running Aquarium; they do not create another receiver.</p>
+<p>Add the live aquarium to your Home Assistant dashboard. All cards show the same running Aquarium; they do not create another receiver.</p>
 <ol>
 <li>Install <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=lovelylain&amp;repository=ha-addon-iframe-card" target="_blank" rel="noopener noreferrer">Ingress webpage card in HACS</a>, then reload your Home Assistant browser page. If needed, add <code>https://github.com/lovelylain/ha-addon-iframe-card</code> as a custom Dashboard repository in HACS.</li>
 <li>Open this add-on's <strong>Info</strong> page in Settings → Apps/Add-ons. Copy its page URL or the full slug from it, including the repository prefix. This is not the aquarium Web UI / ingress URL.</li>
@@ -33,19 +34,22 @@ textarea{resize:vertical;line-height:1.5;min-height:8rem}label{display:block;mar
 <input id="slug" placeholder="xxxxxxxx_loragotchi_aquarium" autocomplete="off" spellcheck="false" aria-describedby="slug-error">
 <p id="slug-error" role="status">Enter your installed add-on's slug to generate the cards.</p>
 <h2>Aquarium · view only</h2>
-<p>The scene without operator controls. A wide dashboard section works best.</p>
+<p>The aquarium display. Settings are managed in Home Assistant. A wide dashboard section works best.</p>
 <textarea id="view-yaml" aria-label="Aquarium card YAML" readonly spellcheck="false"></textarea>
 <button type="button" data-copy="view-yaml" disabled>Copy aquarium card</button>
-<h2>Operator controls · optional</h2>
-<p>The full interactive desktop. Use a wide or panel dashboard view; controls are cramped on a phone.</p>
-<textarea id="control-yaml" aria-label="Operator card YAML" readonly spellcheck="false"></textarea>
-<button type="button" data-copy="control-yaml" disabled>Copy controls card</button>
 <p id="feedback" role="status" aria-live="polite"></p>
 <p><small>Home Assistant OS / Supervisor and an administrator account are required for this route. The card manages ingress sessions using your HA login—do not paste tokens or temporary <code>/api/hassio_ingress/…</code> URLs. The view stream rejects input, but this does not give a user guest-only access to the add-on. The card is installed separately through HACS; this page does not change your dashboard or install anything.</small></p>
-<p><small>Docker / HA Container users: use the built-in Webpage card with your configured authenticated HTTPS aquarium URL ending in <code>/view/</code> or <code>/control/</code>, not these Supervisor cards.</small></p>
+<p><small>Docker / HA Container users: use the built-in Webpage card with your configured authenticated HTTPS aquarium URL ending in <code>/view/</code>, not these Supervisor cards.</small></p>
 </section>
 </main>
 <script>
+let aspectRatio='56.25%';
+fetch('./presentation.json',{cache:'no-store'}).then(response=>response.json()).then(info=>{
+  aspectRatio=(100*info.height/info.width).toFixed(2)+'%';
+  document.querySelectorAll('.legacy-controls').forEach(element=>element.hidden=info.managed);
+  document.querySelectorAll('.managed-only').forEach(element=>element.hidden=!info.managed);
+  if(slugInput.value)updateCards();
+}).catch(()=>{});
 const slugInput=document.querySelector('#slug');
 const error=document.querySelector('#slug-error');
 const feedback=document.querySelector('#feedback');
@@ -62,7 +66,7 @@ function updateCards(){
   const slug=getSlug(slugInput.value);feedback.textContent='';
   error.textContent=slug?'Ready to copy.':"Enter the full Aquarium add-on slug or its Settings Info page URL—not an ingress URL.";
   slugInput.setAttribute('aria-invalid',String(!slug&&slugInput.value.trim()!==''));
-  for(const [mode,title,ratio] of [['view','Aquarium','56.25%'],['control','Aquarium controls','53.63%']]){
+  for(const [mode,title,ratio] of [['view','Aquarium',aspectRatio]]){
     document.querySelector('#'+mode+'-yaml').value=slug?`type: custom:addon-iframe-card\ntitle: ${title}\nurl: ${slug}/${mode}/\naspect_ratio: "${ratio}"\n`:'';
   }
   document.querySelectorAll('[data-copy]').forEach(button=>button.disabled=!slug);

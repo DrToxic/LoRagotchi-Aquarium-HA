@@ -1,4 +1,4 @@
-"""Supervise one native renderer and two narrowly scoped browser presentations."""
+"""Supervise the native renderer independently of the durable receiver."""
 import json
 import os
 from pathlib import Path
@@ -20,7 +20,7 @@ def configuration():
         return value
     mode=get('mode', 'demo')
     if mode not in ('demo','live','home_assistant'): raise ValueError('mode must be demo, home_assistant or live')
-    return dict(ha=ha, mode=mode, width=number('width',960,320,1920), height=number('height',540,180,1080),
+    return dict(ha=ha, options=raw, mode=mode, width=number('width',960,320,1920), height=number('height',540,180,1080),
                 fps=number('fps',20,10,60), fish=number('demo_fish',12,0,256),
                 host=str(get('radio_host','')),port=number('radio_port',5000,1,65535),
                 control=str(get('radio_control',False)).lower()=='true',
@@ -60,13 +60,14 @@ http {
   location = / { try_files /index.html =404; }
   location = /view/ { try_files /screen.html =404; }
   location = /control/ { try_files /screen.html =404; }
+  location = /presentation.json { add_header Cache-Control "no-store"; try_files /presentation.json =404; }
   location /novnc/ { alias /usr/share/novnc/; }
   location = /ws/view { proxy_pass http://127.0.0.1:9001; WS }
   location = /ws/control { proxy_pass http://127.0.0.1:9002; WS }
   location / { return 404; }
  }
 }
-'''.replace('GUARD',guard).replace('WS','proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 3600s; proxy_buffering off;')
+'''.replace('GUARD',guard).replace('127.0.0.1:9002', '127.0.0.1:9001' if ha else '127.0.0.1:9002').replace('WS','proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 3600s; proxy_buffering off;')
 
 
 def stop_processes(processes):
@@ -85,6 +86,15 @@ def main():
     w,h=cfg['width'],cfg['height']
     app=[sys.executable,'-m','tank','--stream-layout','--width',str(w),'--height',str(h),
          '--fps',str(cfg['fps']),'--no-vsync','--settings','/data/config/loragotchi-tank/settings.json']
+    if cfg['ha']:
+        from tank.ha_settings import render_settings
+        settings_path=Path('/run/aquarium-settings.json')
+        render_settings(cfg['options']).save(settings_path)
+        app=[sys.executable,'-m','tank','--managed-settings','--width',str(w),'--height',str(h),
+             '--settings',str(settings_path)]
+    presentation_path=Path('/opt/stream/web/presentation.json')
+    presentation_path.write_text(json.dumps(dict(managed=cfg['ha'],width=w,height=h)))
+    presentation_path.chmod(0o644)  # Public dimensions/mode; readable by nginx's worker.
     backend_command=None
     if cfg['mode']=='demo': app+=['--demo',str(cfg['fish'])]
     elif cfg['mode']=='home_assistant':
@@ -111,19 +121,23 @@ def main():
     def start(command):
         proc=subprocess.Popen(command,env=display_env);children.append(proc);return proc
     def presentation():
-        start(['Xvfb',':99','-screen','0',f'{w+472}x{max(h,768)}x24','-nolisten','tcp','-ac'])
+        display_size=f'{w}x{h}x24' if cfg['ha'] else f'{w+472}x{max(h,768)}x24'
+        start(['Xvfb',':99','-screen','0',display_size,'-nolisten','tcp','-ac'])
         for _ in range(100):
             if subprocess.run(['xdpyinfo','-display',':99'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=display_env).returncode==0: break
             if stopping or children[0].poll() is not None: raise RuntimeError('Virtual display failed')
             time.sleep(.05)
         else: raise RuntimeError('Virtual display did not start')
         start(app)
-        for port,extra in ((5901,['-viewonly','-clip',f'{w}x{h}+0+0']),(5902,[])):
+        streams=[(5901,['-viewonly','-clip',f'{w}x{h}+0+0'])]
+        if not cfg['ha']:streams.append((5902,[]))
+        for port,extra in streams:
             start(['x11vnc','-display',':99','-localhost','-rfbport',str(port),'-forever','-shared','-nopw','-noxdamage','-quiet']+extra)
         start(['websockify','127.0.0.1:9001','127.0.0.1:5901'])
-        start(['websockify','127.0.0.1:9002','127.0.0.1:5902'])
+        if not cfg['ha']:start(['websockify','127.0.0.1:9002','127.0.0.1:5902'])
         start(['nginx','-c','/run/aquarium-nginx.conf','-g','daemon off;'])
-        print('Aquarium stream ready: /view/ (server-enforced read-only), /control/ (operator)',flush=True)
+        print('Aquarium stream ready: /view/ (server-enforced read-only); '+
+              ('settings in Home Assistant Configuration' if cfg['ha'] else '/control/ (operator)'),flush=True)
     retry_display=retry_backend=0
     try:
         while not stopping:

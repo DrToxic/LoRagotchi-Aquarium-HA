@@ -12,7 +12,6 @@ from .views import AquariumView, desktop_lenses
 from .window_mode import WindowModes
 from .window_drag import WindowDrag
 from .service import Service
-from .options import OptionsPanel
 from .deadzones import DisplayProfile, MAX_WINDOWS
 from .projection import blackout_geometry
 from .text import configure_text, display_text
@@ -25,9 +24,10 @@ from .transitions import FishTransitions
 
 class Aquarium(ShowBase):
     def __init__(self,args):
-        self.args=args;self.streaming=getattr(args,"stream_layout",False);self.settings=Settings.load(args.settings)
+        self.args=args;self.managed=getattr(args,"managed_settings",False)
+        self.streaming=self.managed or getattr(args,"stream_layout",False);self.settings=Settings.load(args.settings)
         self.display_path=Path(args.settings).with_name('display-layout.json')
-        self.display=DisplayProfile.load(self.display_path)
+        self.display=DisplayProfile() if self.managed else DisplayProfile.load(self.display_path)
         self.restore_rectangles=self.display.windows if args.wall_columns is None and not self.streaming else []
         if self.restore_rectangles:args.width,args.height=self.restore_rectangles[0][2:]
         self.start_windows=1 if self.streaming else args.wall_columns or len(self.restore_rectangles) or 1
@@ -40,11 +40,12 @@ class Aquarium(ShowBase):
         if args.no_caustics:self.settings.caustics=False
         if args.no_vsync:self.settings.vsync=False
         loadPrcFileData("tank",f"window-title LoRagotchi Aquarium — Controls\nwin-size 456 748\nwin-origin 32 32\nundecorated false\nfullscreen false\nsync-video {str(self.settings.vsync).lower()}\naudio-library-name null\nframebuffer-multisample 0\ntextures-power-2 none\nnotify-level warning\n")
-        if self.streaming:loadPrcFileData("stream",f"win-origin {args.width+16} 0\nundecorated true\n")
+        if self.managed:loadPrcFileData("managed",f"window-title LoRagotchi Aquarium\nwin-size {args.width} {args.height}\nwin-origin 0 0\nundecorated true\n")
+        elif self.streaming:loadPrcFileData("stream",f"win-origin {args.width+16} 0\nundecorated true\n")
         configure_text()
         super().__init__();self.disableMouse();self.setBackgroundColor(.012,.075,.115,1)
         self.sim=Simulation();self.models={};self.roster=[];self.inbox=[];self.status="Starting aquarium…"
-        self.selected=0;self.show_names=False;self.panel_visible=True;self.start=time.monotonic();self.screenshot_done=False
+        self.selected=0;self.show_names=self.settings.show_names;self.panel_visible=not self.managed;self.start=time.monotonic();self.screenshot_done=False
         self.scene=self.render.attachNewNode("aquarium");self.scene.setTwoSided(True)
         self.transitions=FishTransitions(self);self._model_snapshots={}
         ambient=AmbientLight("blue-water-ambient");ambient.setColor((.63,.71,.73,1));self.ambient=self.render.attachNewNode(ambient)
@@ -66,12 +67,14 @@ class Aquarium(ShowBase):
         self.rebuild_scene()
         for i in range(self.start_windows):
             self.add_window(self.restore_rectangles[i] if self.restore_rectangles else None)
-        self.build_panel()
-        self.show_controls()
-        self.accept("tab",self.tab);self.accept("escape",self.escape);self.accept("f",self.shortcut,[self.fullscreen])
-        self.accept("n",self.shortcut,[self.toggle_names]);self.accept("v",self.shortcut,[self.add_window]);self.accept("arrow_right",self.shortcut,[self.select_next])
-        self.accept("delete",self.shortcut,[self.remove_selected])
-        for i,name in enumerate(PRESETS,1):self.accept(str(i),self.shortcut,[self.set_preset,name])
+        self.mode="demo" if args.demo is not None else "replay" if args.replay else "live"
+        if not self.managed:
+            self.build_panel()
+            self.show_controls()
+            self.accept("tab",self.tab);self.accept("escape",self.escape);self.accept("f",self.shortcut,[self.fullscreen])
+            self.accept("n",self.shortcut,[self.toggle_names]);self.accept("v",self.shortcut,[self.add_window]);self.accept("arrow_right",self.shortcut,[self.select_next])
+            self.accept("delete",self.shortcut,[self.remove_selected])
+            for i,name in enumerate(PRESETS,1):self.accept(str(i),self.shortcut,[self.set_preset,name])
         self.accept("window-event",self.on_window)
         self._sync_secondary()
         if args.fullscreen:self.fullscreen()
@@ -83,7 +86,7 @@ class Aquarium(ShowBase):
         self.taskMgr.add(self.update,"aquarium-update")
         gsg=(self.aquarium_window or self.win).getGsg()
         print(f"Renderer: {gsg.getDriverVendor()} / {gsg.getDriverRenderer()} / {gsg.getDriverVersion()}",flush=True)
-        print(f"Controls window + {len(self.views)} aquarium view(s); internal {self.internal_size}",flush=True)
+        print(f"{len(self.views)} aquarium view(s); internal {self.internal_size}; controls {not self.managed}",flush=True)
         if self.streaming:print("Hosted aquarium: fixed single view; browser fullscreen available",flush=True)
         else:print("Aquarium: drag anywhere to move; drag edges to resize; Tab controls; F fullscreen; N names; V add view; Esc close view",flush=True)
 
@@ -179,20 +182,21 @@ class Aquarium(ShowBase):
             rectangle=(x,y,width,height)
         x,y,width,height=rectangle
         props.setSize(width,height);props.setOrigin(x,y);props.setFullscreen(False);props.setUndecorated(True)
-        window=self.openWindow(props=props,fbprops=self.win.getFbProperties(),makeCamera=False,type='onscreen')
+        window=self.win if self.managed else self.openWindow(props=props,fbprops=self.win.getFbProperties(),makeCamera=False,type='onscreen')
         if window is None or not window.isValid():
             if window is not None:self.closeWindow(window)
             self.status="Additional window could not open";return
         view=AquariumView(self,window);view.view_id=view_id
         self.views.append(view);view.names.sync(self.transitions.shown.values())
-        view.input=self.setupMouse(window,fMultiWin=True)
-        prefix=f'view-{view_id}-';view.input.node().setPrefix(prefix)
+        view.input=None if self.managed else self.setupMouse(window,fMultiWin=True)
+        prefix=f'view-{view_id}-'
+        if view.input:view.input.node().setPrefix(prefix)
         for key,callback,args in (
             ('v',self.add_window,[]),('n',self.toggle_names,[]),('f',self.fullscreen,[window]),
             ('escape',self.close_view,[view]),('arrow_right',self.select_next,[]),
             ('tab',self.show_controls,[]),('mouse1',self.window_drag.begin,[view]),
             ('mouse1-up',self.window_drag.finish,[view])):
-            if self.streaming and key in ("mouse1","mouse1-up"):continue
+            if self.managed or (self.streaming and key in ("mouse1","mouse1-up")):continue
             self.accept(prefix+key,callback,args)
         self._sync_secondary();self.setup_output()
         if hasattr(self,'controls'):self.controls.deadzones.refresh_windows(view_id)
@@ -217,7 +221,8 @@ class Aquarium(ShowBase):
             view.window.setSort(max(w.getSort() for w in self.winList)+1)
             self.graphicsEngine.renderFrame()
         view.destroy()
-        self.closeWindow(view.window);self._sync_secondary()
+        if view.window!=self.win:self.closeWindow(view.window)
+        self._sync_secondary()
         if not self._destroying:
             self.setup_output()
             if hasattr(self,'controls'):
@@ -259,6 +264,7 @@ class Aquarium(ShowBase):
         for view in self.views:view.names.sync(visible)
 
     def build_panel(self):
+        from .options import OptionsPanel
         self.controls=OptionsPanel(self)
         self.panel=self.controls.root
 
@@ -286,6 +292,7 @@ class Aquarium(ShowBase):
             props=WindowProperties();props.setMinimized(True)
             self.win.requestProperties(props);self.panel_visible=False
     def show_controls(self):
+        if self.managed:return
         props=WindowProperties();props.setMinimized(False);props.setForeground(True)
         self.win.requestProperties(props)
         self.panel_visible=True
@@ -338,7 +345,8 @@ class Aquarium(ShowBase):
         if not hasattr(self,'views'):return
         view=next((v for v in self.views if v.window==window),None)
         if window==self.win:
-            self.panel_visible=not window.getProperties().getMinimized()
+            self.panel_visible=not self.managed and not window.getProperties().getMinimized()
+            if self.managed:self.setup_output()
             if hasattr(self,"controls"):self.controls.resize()
             # ShowBase otherwise throttles the entire app when its primary
             # window is minimized, even while aquarium outputs are on display.
@@ -359,6 +367,16 @@ class Aquarium(ShowBase):
             else:widget['text']=rendered
             self._ui_text[key]=text
 
+    def log_connection(self,event):
+        details=event.get('details',{});companion=details.get('companion') or {}
+        returns=details.get('returns',{})
+        status=(event.get('text',''),companion.get('entry',''),companion.get('key',''),
+                returns.get('pending',0),returns.get('unresolved',0))
+        if status!=getattr(self,'_logged_connection',None):
+            self._logged_connection=status
+            print(f"Connection: {status[0]} | entry={status[1]} node={status[2]} | "
+                  f"returns pending={status[3]} unresolved={status[4]}",flush=True)
+
     def update_fish(self,dt):
         poses=self.sim.step(dt)
         for key,pose in poses.items():
@@ -373,24 +391,27 @@ class Aquarium(ShowBase):
     def update(self,task):
         dt=min(ClockObject.getGlobalClock().getDt(),.1)
         self.window_drag.update()
-        self.controls.clipboard.pump()
+        if hasattr(self,"controls"):self.controls.clipboard.pump()
         while not self.service.events.empty():
             event=self.service.events.get_nowait()
             if isinstance(event,dict):
                 kind=event.get("kind")
                 if kind=="roster":
                     new=event["fish"]
-                    if event.get("mode",self.controls.mode)!=self.controls.mode:
+                    if event.get("mode",self.mode)!=self.mode:
                         # Switching demo/replay to live never leaves synthetic
                         # fish performing departures over the live collection.
                         self.transitions.destroy();self.transitions=FishTransitions(self)
                     self.roster=new;self.sync_models()
-                    self.controls.mode=event.get("mode",self.controls.mode)
+                    self.mode=event.get("mode",self.mode)
+                    if hasattr(self,"controls"):self.controls.mode=self.mode
                 elif kind=="connection":
-                    self.status=event["text"];self.controls.on_connection(event)
-                elif kind=="devices":self.controls.on_devices(event)
+                    self.status=event["text"]
+                    if hasattr(self,"controls"):self.controls.on_connection(event)
+                    else:self.log_connection(event)
+                elif kind=="devices" and hasattr(self,"controls"):self.controls.on_devices(event)
                 elif kind=="notice":self.status=event["text"]
-                elif kind and kind.startswith('radio_'):self.controls.radio.on_event(event)
+                elif kind and kind.startswith('radio_') and hasattr(self,'controls'):self.controls.radio.on_event(event)
                 elif kind=="mesh":
                     self.inbox=(self.inbox+[event])[-100:]
                     self.chat.accept(event)
@@ -406,7 +427,7 @@ class Aquarium(ShowBase):
         space_note=f" · {waiting} waiting for swim space" if waiting else ""
         moving=len(self.transitions.arrivals)+len(self.transitions.departures)
         if moving:space_note+=f" · {moving} in transition"
-        self.set_ui_text(self.footer,f"{len(self.roster)} shared fish{space_note}\n{self.status}")
+        if hasattr(self,"footer"):self.set_ui_text(self.footer,f"{len(self.roster)} shared fish{space_note}\n{self.status}")
         now=time.monotonic()
         if self.panel_visible and now>=self._next_ui_update:
             self._next_ui_update=now+.15

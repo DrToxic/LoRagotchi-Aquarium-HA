@@ -1,0 +1,92 @@
+configuration:
+  mode:
+    name: Connection mode
+    description: Demo has synthetic fish. Home Assistant shares MeshCore's existing connection. Live is the optional dedicated MeshCoMod RX connection.
+  ha_entry_id:
+    name: MeshCore entry ID
+    description: Leave empty to select the only companion. For multiple companions, copy the intended entry ID from the add-on log.
+  ha_receive_fish:
+    name: Receive fish through Home Assistant
+    description: Enable durable fish capture and automatic returns. Off performs read-only connection diagnostics. Save and restart to apply.
+  demo_fish:
+    name: Demo fish count
+    description: Number of synthetic visitors in demo mode only (0–256).
+  width:
+    name: Aquarium width
+    description: Output width in pixels (320–1920). Save and restart to apply.
+  height:
+    name: Aquarium height
+    description: Output height in pixels (180–1080). Match your dashboard card's aspect ratio.
+  fps:
+    name: Frame rate limit
+    description: Maximum rendered frames per second (10–60). Lower values reduce host load. Overrides the preset's frame rate.
+  graphics_preset:
+    name: Graphics preset
+    description: Sets render scale, fish detail, plants, bubbles, lighting and caustics. Optional overrides below take precedence. Save and restart to apply.
+  render_scale:
+    name: Render scale override
+    description: Optional internal resolution multiplier (0.25–2). Omit for the preset value. Labels stay at output resolution.
+  detail:
+    name: Fish detail override
+    description: Optional fish geometry detail (8–48). Omit for the preset value.
+  plants:
+    name: Plant count override
+    description: Optional plant count (0–100). Omit for the preset value.
+  bubbles:
+    name: Bubble count override
+    description: Optional bubble count (0–100). Omit for the preset value.
+  lighting:
+    name: Lighting override
+    description: Optional scene lighting toggle. Omit for the preset value.
+  caustics:
+    name: Caustics override
+    description: Optional animated water lighting toggle. Omit for the preset value.
+  vsync:
+    name: Vertical sync
+    description: Off is recommended for the virtual display; frame rate is limited separately.
+  chat_bubbles:
+    name: Channel chat bubbles
+    description: Display received channel messages above the water in dedicated live RX mode. HA MeshCore mode leaves chat in MeshCore Chat and does not forward channel messages.
+  show_names:
+    name: Fish name labels
+    description: Show names above swimming fish.
+  fish_animations:
+    name: Arrival and departure animations
+    description: Animate new fish, appearance updates and departures. This affects visuals only, not stored copies or radio returns.
+  decorations:
+    name: Seabed decorations
+    description: Enable individual objects and their collision geometry. Save and restart to apply.
+    fields:
+      anchor:
+        name: Old anchor
+      clay-pots:
+        name: Clay pots
+      pirate-ship:
+        name: Pirate ship wreck
+      stone-arch:
+        name: Ancient stone arch
+      treasure-chest:
+        name: Treasure chest
+  exit_styles:
+    name: Random departure styles
+    description: Choose allowed exit animations. With every style off, fish swim up and out.
+    fields:
+      shark:
+        name: Cartoon shark
+      net:
+        name: Fish net
+      bag:
+        name: Water bag
+      bowl:
+        name: Lift-out bowl
+      cage:
+        name: Open fish cage
+  radio_host:
+    name: Dedicated RX host
+    description: Hostname or IP for legacy live mode only. Unused in Home Assistant mode.
+  radio_port:
+    name: Dedicated RX port
+    description: TCP port for legacy live mode only (default 5000).
+  radio_control:
+    name: Legacy radio write permission
+    description: Retained for existing configurations. No radio configuration UI is exposed by this add-on. Use MeshCore or MeshCore Chat for radio settings.

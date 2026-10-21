@@ -1,7 +1,7 @@
 name: LoRagotchi Aquarium Preview
-version: "0.3.0-preview.3"
+version: "0.3.0-preview.4"
 slug: loragotchi_aquarium
-description: Native LoRagotchi aquarium and operator controls streamed into Home Assistant
+description: Native LoRagotchi aquarium configured and viewed through Home Assistant
 url: https://github.com/DrToxic/LoRagotchi-Aquarium-HA
 arch:
   - amd64
@@ -24,6 +24,23 @@ options:
   width: 960
   height: 540
   fps: 20
+  graphics_preset: balanced
+  vsync: false
+  chat_bubbles: true
+  show_names: false
+  fish_animations: true
+  decorations:
+    anchor: false
+    clay-pots: false
+    pirate-ship: true
+    stone-arch: false
+    treasure-chest: true
+  exit_styles:
+    shark: true
+    net: true
+    bag: true
+    bowl: true
+    cage: true
   radio_host: ""
   radio_port: 5000
   radio_control: false
@@ -35,6 +52,29 @@ schema:
   width: int(320,1920)
   height: int(180,1080)
   fps: int(10,60)
+  graphics_preset: list(compatibility|low|balanced|high|ultra)
+  render_scale: float(0.25,2)?
+  detail: int(8,48)?
+  plants: int(0,100)?
+  bubbles: int(0,100)?
+  lighting: bool?
+  caustics: bool?
+  vsync: bool
+  chat_bubbles: bool
+  show_names: bool
+  fish_animations: bool
+  decorations:
+    anchor: bool
+    clay-pots: bool
+    pirate-ship: bool
+    stone-arch: bool
+    treasure-chest: bool
+  exit_styles:
+    shark: bool
+    net: bool
+    bag: bool
+    bowl: bool
+    cage: bool
   radio_host: str
   radio_port: port
   radio_control: bool

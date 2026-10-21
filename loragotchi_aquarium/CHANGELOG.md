@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0-preview.4
+
+- HA Configuration now owns graphics presets/overrides, resolution/FPS, fish
+  labels, chat bubbles, decorations and arrival/departure styles. Save and restart.
+- Removed the HA native operator window and all deadzone/mask/layout behavior.
+  Standalone desktop behavior is retained; graphics assets are unchanged.
+- Old controls cards resolve to the read-only aquarium. New card YAML uses the
+  configured output aspect ratio. Connection diagnostics move to the Logs tab.
+- Existing HA connection/output options and fish databases are preserved.
+  Old in-app visual preferences are not imported; reapply them in Configuration.
+  The old settings/layout files are left intact for rollback.
+- Manual collection/retry actions are not mapped to persistent settings. Restart
+  does not clear saved fish or re-arm exhausted return jobs.
+
 ## 0.3.0-preview.3
 
 - Dashboard cards setup page in the Web UI generates aquarium-only and optional

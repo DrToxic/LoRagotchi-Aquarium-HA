@@ -2,10 +2,10 @@
 
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
-**Preview 3 · amd64 only · demo mode by default.** The original Python/Panda3D
+**Preview 4 · amd64 only · demo mode by default.** The original Python/Panda3D
 Aquarium runs in a container and streams to your browser. There is no separate
-browser renderer: the aquarium view and full operator controls use the same
-native application, graphics, fish and saved collection.
+browser renderer. All add-on settings live in Home Assistant’s Configuration
+tab; the native display has no operator window or deadzones.
 
 ## Install on Home Assistant OS
 
@@ -19,8 +19,8 @@ native application, graphics, fish and saved collection.
 3. Refresh the store, open **LoRagotchi Aquarium Preview**, and select **Install**.
    This builds the container locally; the first installation can take several minutes.
 4. Keep **mode: demo**, then **Start → Open Web UI**. Optionally enable **Show in sidebar**.
-5. Choose **View aquarium** for the view-only stream or **Open controls** for the
-   interactive native operator interface.
+5. Choose **View aquarium**. Change graphics, names, decorations, animations and
+   connection options in the add-on’s **Configuration** tab, then **Save → Restart**.
 
 Requires an Intel/AMD 64-bit (`amd64`) HA host. Raspberry Pi/HA Green ARM builds
 are not included. HA supplies authentication; the app is admin-only and does not
@@ -38,14 +38,14 @@ live data is not automatically migrated. Do not run two live intake consumers.
    through HACS and reload your Home Assistant browser page.
 2. Open **Aquarium Web UI → Dashboard cards**.
 3. Paste the add-on's Settings **Info page URL** or its full slug (including the
-   repository prefix). Copy **Aquarium** or optional **Operator controls** YAML.
+   repository prefix). Copy the **Aquarium** YAML.
 4. In your dashboard, select **Edit → Add card → Manual**, paste, and save.
 
-The aquarium card uses the server-enforced view-only stream. Controls remain
-interactive and work best in a wide/panel view. The card handles ingress sessions
+The aquarium card uses the server-enforced view-only stream. Old controls cards
+now show that same read-only aquarium. The card handles ingress sessions
 using your HA login; no tokens, exposed ports, or saved temporary URLs are needed.
 This Supervisor route requires an administrator account. The external card is
-installed through HACS, not automatically by Aquarium. Both cards display the
+installed through HACS, not automatically by Aquarium. All cards display the
 same running native application; they do not create another receiver.
 
 See [examples and HACS architecture](docs/HOME_ASSISTANT.md#lovelace-dashboard-cards).
@@ -77,7 +77,7 @@ component is required. Aquarium owns durable fish capture and return jobs in a
 headless process independent of its renderer.
 
 Start with `ha_receive_fish: false` to check the selected node without sending;
-then enable it after the displayed identity is correct. HAOS uses the built-in
+then enable it after the identity in the add-on Logs is correct. HAOS uses the built-in
 Supervisor authentication. Multiple companions require an explicit
 `ha_entry_id`. MeshCore's documented 3.0.3 API contract is required.
 
@@ -99,10 +99,10 @@ connection panel have local automated/fixture evidence. See
 [the exact preview-2 validation boundary](docs/HOME_ASSISTANT.md#verification-boundary-for-preview-2).
 A fixture is not Home Assistant or a physical radio. The owner reports preview 2
 works on their HA installation. That report does not establish every recovery
-or RF case. Preview 3 adds only dashboard setup; its
-actual Lovelace/Supervisor embedding still needs an on-device check.
+or RF case. The owner also confirmed the preview-3 ingress card works.
+Preview 4 moves configuration into HA; its updated form still needs an on-device check.
 
-The unchanged browser streaming/access boundary retains preview-1 test evidence.
+The HA stream is now entirely read-only, including the old controls route.
 ARM builds, a bundled custom card, HA sensors, registry publishing,
 automatic upstream graphics sync and firmware updating remain outside this preview.
 

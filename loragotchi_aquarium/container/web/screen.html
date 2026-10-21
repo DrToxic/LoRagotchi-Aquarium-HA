@@ -2,7 +2,8 @@
 <style>html,body,#screen{width:100%;height:100%;margin:0;overflow:hidden;background:#051a22}#state{position:absolute;inset:0;display:grid;place-items:center;color:#bfd9de;font:16px system-ui;pointer-events:none}#state:empty{display:none}</style></head><body><div id="screen"></div><div id="state">Connecting…</div>
 <script type="module">
 import RFB from '../novnc/core/rfb.js';
-const mode=location.pathname.endsWith('/view/')?'view':'control';
+const presentation=await fetch('../presentation.json',{cache:'no-store'}).then(response=>{if(!response.ok)throw Error('Presentation unavailable');return response.json()});
+const mode=presentation.managed||location.pathname.endsWith('/view/')?'view':'control';
 const endpoint=new URL('../ws/'+mode,location.href);endpoint.protocol=location.protocol==='https:'?'wss:':'ws:';
 const state=document.querySelector('#state');
 const rfb=new RFB(document.querySelector('#screen'),endpoint.href);
