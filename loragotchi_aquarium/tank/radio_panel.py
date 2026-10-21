@@ -86,6 +86,10 @@ class RadioPanel:
         self.build_channels(self.pages['Channels']);self.build_device(self.pages['Device']);self.build_tools(self.pages['Tools'])
         self.status=ui.label(parent,'Connect a radio to use chat and device tools.',18,641,11,396)
         self.page('Connection');self.refresh_enabled()
+        if getattr(ui,'ha_mode',False):
+            for name,button in self.tabs.items():
+                if name!='Connection': button.hide()
+            self.status['text']='Radio controls remain in Home Assistant.'
 
     def button(self,parent,text,x,y,width,action,write=True):
         button=self.ui.button(parent,text,x,y,width,action)
@@ -102,6 +106,9 @@ class RadioPanel:
         if name=='Chat' and self.conversation:self.load_history()
 
     def connection(self,event):
+        if getattr(self.ui,'ha_mode',False):
+            self.status['text']='Radio controls remain in MeshCore / MeshCore Chat.'
+            return
         self.connected=event['state']=='connected'
         if not self.connected:
             self.confirmation=None

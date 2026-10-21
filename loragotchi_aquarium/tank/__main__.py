@@ -9,6 +9,7 @@ def main():
     mode.add_argument("--demo",type=int,nargs="?",const=12,help="bounded synthetic visitors (0..256), no radio")
     mode.add_argument("--replay",type=Path,help="JSONL records: rx public-key hex and payload hex")
     mode.add_argument("--connect",help="serial:PORT, ble:ADDRESS or tcp:HOST:PORT (bridge), meshcore:HOST:PORT (radio)")
+    mode.add_argument("--ha-socket", type=Path, help="Private IPC socket of the HA receiver backend")
     parser.add_argument("--token-file",type=Path,help="32-byte pairing token for authenticated TCP bridge")
     parser.add_argument("--radio-control",action="store_true",help="Allow chat/configuration writes to a direct MeshCoMod radio (off by default)")
     parser.add_argument("--stream-layout",action="store_true",help="Fixed single aquarium at 0,0 and operator beside it for browser streaming")
@@ -33,7 +34,7 @@ def main():
     for key,low,high in (("detail",8,48),("plants",0,100),("bubbles",0,100),("fps",10,240)):
         value=getattr(args,key)
         if value is not None and not low<=value<=high:parser.error(f"{key} must be {low}..{high}")
-    if args.demo is None and not args.connect and not args.replay:args.demo=12
+    if args.demo is None and not args.connect and not args.replay and not args.ha_socket:args.demo=12
     if args.demo is not None and not 0<=args.demo<=256:parser.error("Demo fish count must be 0..256")
     if args.width<320 or args.height<180:parser.error("Output must be at least 320x180")
     if args.second_width is not None and args.second_width<320:parser.error("Second output width must be at least 320")
@@ -43,6 +44,7 @@ def main():
     if args.stream_layout:
         args.wall_columns=1;args.fullscreen=False
     args.live_database=live_database()
+    if args.ha_socket: args.database=Path(':memory:')  # Backend alone owns live storage.
     if not args.database:
         if args.demo is not None or args.replay:args.database=Path(':memory:')
         else:

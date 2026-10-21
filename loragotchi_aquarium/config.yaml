@@ -1,5 +1,5 @@
 name: LoRagotchi Aquarium Preview
-version: "0.3.0-preview.1"
+version: "0.3.0-preview.2"
 slug: loragotchi_aquarium
 description: Native LoRagotchi aquarium and operator controls streamed into Home Assistant
 url: https://github.com/DrToxic/LoRagotchi-Aquarium-HA
@@ -8,6 +8,7 @@ arch:
 startup: application
 boot: auto
 init: false
+homeassistant_api: true
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:fishbowl-outline
@@ -17,6 +18,8 @@ environment:
   AQUARIUM_INGRESS: "1"
 options:
   mode: demo
+  ha_entry_id: ""
+  ha_receive_fish: false
   demo_fish: 12
   width: 960
   height: 540
@@ -25,7 +28,9 @@ options:
   radio_port: 5000
   radio_control: false
 schema:
-  mode: list(demo|live)
+  mode: list(demo|home_assistant|live)
+  ha_entry_id: str
+  ha_receive_fish: bool
   demo_fish: int(0,256)
   width: int(320,1920)
   height: int(180,1080)

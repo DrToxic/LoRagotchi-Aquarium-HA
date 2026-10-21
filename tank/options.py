@@ -22,6 +22,7 @@ class OptionsPanel:
     def __init__(self, app):
         self.app = app; self.entries = []; self.devices = {}; self.scan_pending = False
         self.clipboard=Clipboard()
+        self.ha_mode = bool(getattr(app.args, 'ha_socket', None))
         self.state = 'idle'; self.mode = 'demo' if app.args.demo is not None else 'replay' if app.args.replay else 'live'
         self.profile = ConnectionProfile.load(Path(app.args.settings).with_name('rx-connection.json'))
         if app.args.connect:
@@ -121,6 +122,17 @@ class OptionsPanel:
         a.clear_confirm=0; a.scale_label_update()
 
     def build_radio(self,parent):
+        if self.ha_mode:
+            self.label(parent,'HOME ASSISTANT MESHCORE',18,105,14)
+            self.label(parent,'Uses the existing HA radio connection.\nNo firmware replacement or second radio socket.',18,155,13,392)
+            self.label(parent,'Chat, contacts, channels and device settings\nstay in MeshCore / MeshCore Chat.',18,220,13,392)
+            self.connection_label=self.label(parent,'Connecting to backend…',18,290,13,392)
+            self.ha_details=self.label(parent,'',18,360,12,392)
+            self.retry_button=self.button(parent,'Retry unresolved returns',18,510,396,
+                lambda:self.app.service.commands.put(('retry_returns',)))
+            self.enabled(self.retry_button,False)
+            self.mode_label=self.label(parent,'HA and backend must stay running for fish visits.',18,559,12,392)
+            return
         self.label(parent,'CONNECT TO LoRagotchi-RX',18,105,12)
         self.transport_menu=self.menu(parent,list(self.TYPES),24,139,376,self.transport_changed,
                                       list(self.TYPES.values()).index(self.profile.transport))
@@ -218,9 +230,24 @@ class OptionsPanel:
         self.state=event.get('state','idle')
         self.connection_label['text']=display_text(textwrap.fill(event['text'],width=54,max_lines=5,placeholder='…'))
         self.radio.connection(event)
+        if self.ha_mode:
+            details=event.get('details',{})
+            companion=details.get('companion') or {}
+            counts=details.get('returns',{})
+            lines=[]
+            if companion:
+                lines += [f"Node {companion['key'][:12]}", f"Entry: {companion['entry']}"]
+            lines += [f"Returns: {counts.get('pending',0)} pending / {counts.get('unresolved',0)} unresolved",
+                      details.get('last_message','')]
+            self.ha_details['text']=display_text('\n'.join(lines))
+            self.enabled(self.retry_button,bool(details.get('receive') and counts.get('unresolved')))
         self.refresh()
 
     def refresh(self):
+        if self.ha_mode:
+            if self.app.clear_confirm and self.app.clear_confirm<time.monotonic():
+                self.app.clear_confirm=0;self.app.end_button['text']='End display session'
+            return
         self.radio.refresh_hint()
         self.app.set_ui_text(self.mode_label,('Demo/replay will be replaced by the saved live collection.'
                                  if self.mode!='live' else 'LIVE collection · saved copies remain when disconnected.'))

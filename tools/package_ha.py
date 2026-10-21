@@ -17,6 +17,7 @@ def package(output):
             shutil.copytree(ROOT/name,folder/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
         shutil.copy2(ROOT/'homeassistant/config.yaml.in',folder/'config.yaml')
         shutil.copy2(ROOT/'docs/HOME_ASSISTANT.md',folder/'DOCS.md')
+        shutil.copy2(ROOT/'homeassistant/CHANGELOG.md',folder/'CHANGELOG.md')
         with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(folder.rglob('*')):
                 if path.is_file():archive.write(path,path.relative_to(temporary))

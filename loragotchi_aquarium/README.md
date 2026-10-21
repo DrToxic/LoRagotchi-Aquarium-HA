@@ -2,7 +2,7 @@
 
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
-**Preview 1 · amd64 only · demo mode by default.** The original Python/Panda3D
+**Preview 2 · amd64 only · demo mode by default.** The original Python/Panda3D
 Aquarium runs in a container and streams to your browser. There is no separate
 browser renderer: the aquarium view and full operator controls use the same
 native application, graphics, fish and saved collection.
@@ -51,28 +51,39 @@ embedding, persistent data and rollback are covered in the
 
 ## Existing MeshCore / MeshCore Chat integrations
 
-Keep them installed and configured. HA uses one companion TCP connection and
-Aquarium uses another to the same radio over WLAN. Browser viewers share the
-Aquarium connection. Ordinary Aquarium chat/settings writes default off.
+**Keep your working radio firmware and HACS integrations.** The recommended
+`mode: home_assistant` uses the existing MeshCore integration's supported HA
+API. No second radio connection, replacement firmware, Chat fork or extra HACS
+component is required. Aquarium owns durable fish capture and return jobs in a
+headless process independent of its renderer.
 
-**Stock MeshCoMod does not implement Aquarium fish capture.** Live mode requires
-the separate, pinned MeshCoMod + LoRagotchi-RX prototype. Its V4.3 OLED hardware,
-installed partition layout and physical HACS coexistence still need validation.
-Installing this HA app does not flash or configure your radio. Start with demo.
+Start with `ha_receive_fish: false` to check the selected node without sending;
+then enable it after the displayed identity is correct. HAOS uses the built-in
+Supervisor authentication. Multiple companions require an explicit
+`ha_entry_id`. MeshCore's documented 3.0.3 API contract is required.
 
-[Firmware source and prerequisites](https://github.com/DrToxic/LoRagotchi-Aquarium-HA/blob/main/firmware/meshcomod-rx/README.md)
+```yaml
+mode: home_assistant
+ha_entry_id: ""
+ha_receive_fish: false
+```
+
+**HA and the backend must stay online to handle visits and returns.** Browser
+closures and renderer restarts do not stop the receiver. Old `mode: live`
+remains an optional dedicated MeshCoMod+LRX path, not an HA prerequisite.
+See the [setup and recovery guide](docs/HOME_ASSISTANT.md) before a one-fish trial.
 
 ## Verification and preview limits
 
-The underlying preview passed 162 workspace tests; its fresh standalone source
-archive passed 160 tests with two optional external-RX checks skipped. Native
-graphics, both browser streams, operator input, server-side view-only behavior,
-standalone authentication and a simulated Supervisor ingress proxy were checked.
-Those are retained preview results, not a claim of physical HA/radio acceptance.
+The HA receiver, WebSocket adapter, durable restart handling and native managed
+connection panel have local automated/fixture evidence. See
+[the exact preview-2 validation boundary](docs/HOME_ASSISTANT.md#verification-boundary-for-preview-2).
+A fixture is not Home Assistant or a physical radio. The new image still needs
+an actual HAOS build/token-access check and a controlled fish visit/return trial.
 
-Actual HA installation, physical V4.3 WLAN/USB/RF coexistence, ARM builds,
-Lovelace ingress cards and HA sensors remain follow-up work. No prebuilt image
-registry, automatic upstream graphics sync or firmware updater is included.
+The unchanged browser streaming/access boundary retains preview-1 test evidence.
+ARM builds, persistent Lovelace ingress cards, HA sensors, registry publishing,
+automatic upstream graphics sync and firmware updating remain outside this preview.
 
 ## One graphics source
 

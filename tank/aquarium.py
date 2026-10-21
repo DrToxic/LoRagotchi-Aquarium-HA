@@ -75,7 +75,11 @@ class Aquarium(ShowBase):
         self.accept("window-event",self.on_window)
         self._sync_secondary()
         if args.fullscreen:self.fullscreen()
-        self.service=Service(args)
+        if getattr(args, "ha_socket", None):
+            from .ha_service import HAService
+            self.service=HAService(args)
+        else:
+            self.service=Service(args)
         self.taskMgr.add(self.update,"aquarium-update")
         gsg=(self.aquarium_window or self.win).getGsg()
         print(f"Renderer: {gsg.getDriverVendor()} / {gsg.getDriverRenderer()} / {gsg.getDriverVersion()}",flush=True)

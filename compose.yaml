@@ -1,7 +1,7 @@
 services:
   aquarium:
     build: .
-    image: loragotchi-aquarium:ha-preview1
+    image: loragotchi-aquarium:ha-preview2
     restart: unless-stopped
     ports:
       - "127.0.0.1:8099:8099"
@@ -13,6 +13,13 @@ services:
       AQUARIUM_HEIGHT: 540
       AQUARIUM_FPS: 20
       AQUARIUM_PASSWORD_FILE: /data/web-password
+      # Recommended: existing HA MeshCore, no radio connection or firmware change
+      # AQUARIUM_MODE: home_assistant
+      # AQUARIUM_HA_URL: http://homeassistant.lan:8123
+      # AQUARIUM_HA_TOKEN_FILE: /data/ha-token
+      # AQUARIUM_HA_ENTRY_ID: ""
+      # AQUARIUM_HA_RECEIVE_FISH: "false"
+      # Optional dedicated RX (requires receiver firmware):
       # AQUARIUM_MODE: live
       # AQUARIUM_RADIO_HOST: 192.168.1.50
       # AQUARIUM_RADIO_PORT: 5000

@@ -1,0 +1,60 @@
+"""Renderer-side facade: private IPC only, no HA credentials or database writes."""
+import json
+import queue
+import socket
+import threading
+from .protocol import Snapshot
+
+
+def request(path, action='snapshot', **data):
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+        conn.settimeout(3)
+        conn.connect(str(path))
+        conn.sendall(json.dumps(dict(action=action, **data)).encode() + b'\n')
+        with conn.makefile('rb') as source:
+            raw = source.readline(8 * 1024 * 1024)
+        if not raw.endswith(b'\n'): raise ValueError('Incomplete backend response')
+        result = json.loads(raw)
+        if result.get('error'): raise ValueError(result['error'])
+        return result
+
+
+class HAService:
+    def __init__(self, args):
+        self.path = args.ha_socket
+        self.events, self.commands = queue.Queue(), queue.Queue()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self.run, name='ha-display-client', daemon=True)
+        self.thread.start()
+
+    def connect(self, profile): raise ValueError('HA owns the radio; use the app configuration')
+    def disconnect(self): raise ValueError('Use app configuration to pause intake; accepted returns need the backend')
+    def radio_request(self, action, **data): raise ValueError('Use MeshCore / MeshCore Chat for radio controls')
+
+    def run(self):
+        previous = None
+        offline = False
+        while not self.stop.is_set():
+            try:
+                while not self.commands.empty():
+                    command = self.commands.get_nowait()
+                    if command[0] == 'remove': request(self.path, 'remove', owner=command[1])
+                    elif command[0] in ('clear', 'retry_returns'): request(self.path, command[0])
+                result = request(self.path)
+                if result != previous or offline:
+                    if previous is None or result['fish'] != previous['fish']:
+                        self.events.put(dict(kind='roster', mode='live', fish=[Snapshot(**f) for f in result['fish']]))
+                    text = result['status']
+                    self.events.put(dict(kind='connection', state='connected' if result['online'] else 'retrying',
+                                         text=text, ha=True, details=result))
+                    previous = result
+                offline = False
+            except (OSError, ValueError, KeyError):
+                if not offline:
+                    self.events.put(dict(kind='connection', state='retrying', ha=True,
+                                         text='HA backend unavailable · saved display remains; check app logs'))
+                offline = True
+            self.stop.wait(.5)
+
+    def close(self):
+        self.stop.set(); self.thread.join(4)
