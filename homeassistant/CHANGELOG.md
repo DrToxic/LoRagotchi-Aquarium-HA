@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-preview.8
+
+- Six built-in themes, persistent data-only custom themes and a theme library page under setup.
+- Duplicate/edit/import/export; immutable built-ins and guarded/conflict-aware saves.
+- HA-owned theme_id, fish_style and theme_overrides with Save + Restart.
+- Classic, rounded and faceted meshes preserve received identity/colours and lifecycle.
+- Existing appearance, schedules, expiry and quality migrate unchanged by default.
+
 ## 0.3.0-preview.7
 
 - Optional fish-copy lifespan in hours (0/off by default, fractions through 8760).

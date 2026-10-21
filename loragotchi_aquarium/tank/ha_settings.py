@@ -17,7 +17,7 @@ def boolean(value, name):
     return value
 
 
-def render_settings(options):
+def render_settings(options, theme_directory=None):
     settings = Settings()
     settings.fish_lifespan_hours = validate_hours(options.get('fish_lifespan_hours', 0))
     preset = options.get('graphics_preset', 'balanced')
@@ -59,4 +59,19 @@ def render_settings(options):
     appearance=options.get('appearance', {})
     if not isinstance(appearance,dict):raise ValueError('appearance must be an object')
     settings.appearance=Appearance.from_dict({'timezone':'ha',**appearance})
+    from .themes import ThemeLibrary, apply, overrides, STYLES
+    theme=options.get('theme_id','current')
+    if not isinstance(theme,str):raise ValueError('theme_id must be a string')
+    if theme!='current':
+        try:
+            raw=ThemeLibrary(theme_directory or '/data/config/loragotchi-tank/themes').read(theme)
+        except (ValueError,OSError) as exc:
+            print(f'Theme {theme!r} unavailable; using Classic ({exc})',flush=True)
+            raw=ThemeLibrary('.').read('classic')
+        settings=apply(settings,raw)
+    for key,value in overrides(options.get('theme_overrides',{})).items():setattr(settings.appearance,key,value)
+    style=options.get('fish_style','theme')
+    if style!='theme':
+        if style not in STYLES:raise ValueError('Unknown fish_style')
+        settings.fish_style=style
     return settings

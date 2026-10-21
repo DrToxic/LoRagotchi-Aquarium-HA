@@ -397,3 +397,8 @@ New shares renew copies; duplicates and restarts do not. Existing timestamps
 are honored, so older copies may already be expired when enabled. History is
 retained, manual hiding stays separate, and pending radio returns continue.
 See [Fish lifespan](FISH-LIFESPAN.md) for full semantics and a short demo test.
+
+
+## Themes and fish styles (preview 8)
+
+Use Configuration `theme_id`, `fish_style` and optional `theme_overrides`; Save + Restart. The default `current` retains existing Appearance settings. Open Web UI `setup.html` → Theme library for persistent custom theme editing/import/export. The aquarium root remains display-only. See [Themes](THEMES.md).

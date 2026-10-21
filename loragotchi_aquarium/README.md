@@ -1,5 +1,12 @@
 # LoRagotchi-Aquarium-HA
 
+## Themes and fish styles
+
+Six built-in themes, persistent editable custom themes, JSON import/export, and
+Classic/Rounded/Faceted fish styles. See [Themes](docs/THEMES.md) for controls,
+HA configuration authority and the portable data-only format.
+
+
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
 **Preview 7 · amd64 only · demo mode by default.** The original Python/Panda3D

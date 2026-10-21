@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aquarium · Theme library</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#051a22;color:#d0e6e8;font:15px system-ui}main{max-width:62rem;margin:auto;padding:2rem 1.5rem}h1{font-size:1.7rem;margin-bottom:.4rem}h2{font-size:1.1rem}p{color:#91adb5;line-height:1.6}a{color:#b6eee3}input,select,textarea,button{font:inherit;color:#d0e6e8;background:#0b2732;border:1px solid #2d5b65;border-radius:6px;padding:.65rem;width:100%}button{cursor:pointer;background:#123f49;width:auto}button:disabled{opacity:.45;cursor:default}label{display:grid;gap:.5rem;font-size:.9rem}section{border-top:1px solid #24444f;margin-top:1.5rem;padding-top:1.2rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.actions{display:flex;gap:.6rem;flex-wrap:wrap;margin:1rem 0}#notice{min-height:3em;color:#c1e9df;white-space:pre-wrap}small{color:#91adb5}textarea{min-height:8rem;font:13px ui-monospace,monospace}code{color:#c1e9df}:focus-visible{outline:2px solid #b6eee3;outline-offset:3px}[hidden]{display:none!important}
+</style></head><body><main>
+<a href="setup.html">← Aquarium setup</a><h1>Theme library</h1>
+<p>Create a look for your aquarium. Themes hold colours, lighting and fish style—not fish, connection details, schedules or graphics budgets.</p>
+<p>To use a theme, set <strong>theme_id</strong> in <strong>Home Assistant → Aquarium → Configuration</strong>, then <strong>Save + Restart</strong>. This page edits the library only; saving does not change the running aquarium.</p>
+<section><label>Library<select id="library" aria-label="Theme library"></select></label><div class="actions"><button id="reload">Reload library</button><button id="duplicate">Duplicate selected</button><button id="export">Export JSON</button><button id="import">Import JSON</button><input id="file" type="file" accept=".json,application/json" hidden></div></section>
+<form id="editor"><div class="grid"><label>Theme ID<input id="theme-id" required maxlength="48" pattern="[a-z][a-z0-9-]{0,47}" autocomplete="off"></label><label>Name<input id="theme-name" required maxlength="64"></label><label>Fish style<select id="style"></select></label></div>
+<p id="readonly"></p><section><h2>Water and light</h2><div id="fields" class="grid"></div></section><div class="actions"><button id="save" type="submit">Save theme</button></div></form>
+<p id="notice" role="status" aria-live="polite">Loading themes…</p><p><small>Built-ins are read-only. Duplicate one to start; an imported file opens in the editor before saving. Custom themes persist across app updates. Background images and arbitrary model packs are not part of this version.</small></p>
+</main><script>
+'use strict';
+let catalog, selected, revision=null, selectedId=null;
+const el=id=>document.getElementById(id), status=text=>el('notice').textContent=text;
+const labels={brightness:'Overall brightness',day_brightness:'Day brightness',night_brightness:'Night brightness',day_colour:'Day tint',night_colour:'Night tint',ambient_strength:'Ambient fill',surface_strength:'Surface light',fill_strength:'Side fill',surface_heading:'Light heading',surface_elevation:'Light elevation',background_style:'Background',background_top:'Top / solid colour',background_bottom:'Bottom colour',fog_colour:'Fog colour',fog_density:'Fog density',sand_tint:'Sand tint',caustics_strength:'Caustic strength',caustics_speed:'Caustic speed',shafts_strength:'Shaft strength',plant_sway:'Plant sway',plant_speed:'Sway speed'};
+function option(value,label=value){const item=document.createElement('option');item.value=value;item.textContent=label;return item;}
+function show(raw,rev=null){
+ selected=raw;selectedId=raw.id;revision=rev;el('theme-id').value=raw.id;el('theme-name').value=raw.name;el('style').value=raw.fish_style||'classic';
+ const base=catalog.themes.find(t=>t.builtin&&t.manifest.id===(raw.extends||'classic'));
+ if(!base)throw Error('Themes may extend one built-in only.');
+ const values={...base.resolved,...raw.appearance};
+ for(const field of catalog.fields)el('f-'+field.key).value=values[field.key];
+ readOnly();
+}
+function readOnly(){const builtin=catalog.themes.some(t=>t.builtin&&t.manifest.id===el('theme-id').value);el('save').disabled=builtin;el('readonly').textContent=builtin?'Built-in theme. Duplicate it to save your changes.':'Custom theme. Use this ID in HA Configuration: '+el('theme-id').value;}
+async function load(id){
+ const response=await fetch('./themes-api',{cache:'no-store'});if(!response.ok)throw Error('Theme library unavailable.');catalog=await response.json();
+ el('library').replaceChildren(...catalog.themes.map(t=>option(t.manifest.id,t.manifest.name+(t.builtin?' · built-in':' · custom'))));
+ el('style').replaceChildren(...catalog.styles.map(s=>option(s)));
+ el('fields').replaceChildren();
+ for(const field of catalog.fields){const label=document.createElement('label');label.textContent=labels[field.key]||field.key;const input=document.createElement(field.choices?'select':'input');input.id='f-'+field.key;
+ if(field.choices)input.replaceChildren(...field.choices.map(v=>option(v)));else if(field.range){input.type='number';input.min=field.range[0];input.max=field.range[1];input.step='any';}else{input.type='text';input.maxLength=16;}
+ input.required=true;label.append(input);el('fields').append(label);}
+ el('library').value=catalog.themes.some(t=>t.manifest.id===id)?id:'classic';choose();status(catalog.warnings.join('\n')||'Library ready.');
+}
+function choose(){const item=catalog.themes.find(t=>t.manifest.id===el('library').value);show(item.manifest,item.revision);}
+function collect(){const appearance={};for(const field of catalog.fields){const raw=el('f-'+field.key).value;appearance[field.key]=field.range?Number(raw):raw;}return {schema_version:1,id:el('theme-id').value,name:el('theme-name').value,extends:'classic',appearance,fish_style:el('style').value};}
+el('library').onchange=()=>{choose();status('Loaded into editor. The running aquarium is unchanged.');};
+el('theme-id').oninput=readOnly;
+el('reload').onclick=()=>load(el('library').value).catch(e=>status(e.message));
+el('duplicate').onclick=()=>{el('theme-id').value=(el('theme-id').value.slice(0,38)+'-copy');el('theme-name').value=('My '+el('theme-name').value).slice(0,64);revision=null;readOnly();status('Choose a unique ID, edit, then Save theme.');};
+el('editor').onsubmit=async event=>{event.preventDefault();try{const raw=collect();const response=await fetch('./themes-api',{method:'POST',headers:{'Content-Type':'application/json','X-Aquarium-Themes':'1'},body:JSON.stringify({manifest:raw,revision:raw.id===selectedId?revision:null})});const data=await response.json();if(!response.ok)throw Error(data.error);await load(raw.id);status('Saved '+raw.name+'. Set theme_id to '+raw.id+' in HA Configuration, then Save + Restart.');}catch(e){status(e.message);}};
+el('export').onclick=()=>{const blob=new Blob([JSON.stringify(collect(),null,2)+'\n'],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=el('theme-id').value+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Exported theme JSON only.');};
+el('import').onclick=()=>el('file').click();el('file').onchange=async()=>{try{const file=el('file').files[0];if(!file)return;if(file.size>16384)throw Error('Theme exceeds 16 KiB.');const raw=JSON.parse(await file.text());if(raw.schema_version!==1||!raw.appearance||typeof raw.id!=='string'||Object.keys(raw).some(k=>!['schema_version','id','name','extends','appearance','fish_style'].includes(k))||Object.keys(raw.appearance).some(k=>!catalog.fields.some(f=>f.key===k)))throw Error('Not a supported theme manifest.');show(raw);status('Imported into editor. Give it a unique ID, review, then Save theme.');}catch(e){status(e.message);}finally{el('file').value='';}};
+load().catch(e=>status(e.message));
+</script></body></html>

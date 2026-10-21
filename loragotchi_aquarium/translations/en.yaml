@@ -1,4 +1,13 @@
 configuration:
+  theme_id:
+    name: Theme ID
+    description: current preserves existing Appearance settings. Choose classic, tropical, deep-sea, freshwater, moonlit, minimal or a custom library ID. Named theme fields replace corresponding Appearance values; theme_overrides win. Save and restart.
+  fish_style:
+    name: Fish style
+    description: theme uses the selected theme's style; classic, rounded or faceted overrides it. Received colours and identity remain unchanged. Save and restart.
+  theme_overrides:
+    name: Theme overrides
+    description: Optional aesthetic overrides applied after a named theme (or current Appearance). Manage custom themes at Web UI setup.html → Theme library. Saving library content does not change selection. Save and restart.
   mode:
     name: Connection mode
     description: Demo has synthetic fish. Home Assistant shares MeshCore's existing connection. Live is the optional dedicated MeshCoMod RX connection.

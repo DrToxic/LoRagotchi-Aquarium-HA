@@ -59,6 +59,8 @@ http {
   location = /health { auth_basic off; if ($remote_addr != 127.0.0.1) { return 403; } return 200 'ok'; }
   location = / { try_files HOME_PAGE =404; }
   location = /setup.html { try_files /index.html =404; }
+  location = /themes.html { try_files /themes.html =404; }
+  location = /themes-api { client_max_body_size 16k; proxy_pass http://127.0.0.1:9003; }
   location = /view/ { try_files /screen.html =404; }
   location = /control/ { try_files /screen.html =404; }
   location = /presentation.json { add_header Cache-Control "no-store"; try_files /presentation.json =404; }
@@ -146,6 +148,7 @@ def main():
             time.sleep(.05)
         else: raise RuntimeError('Virtual display did not start')
         start(app)
+        start([sys.executable,'-m','tank.theme_server','--directory','/data/config/loragotchi-tank/themes'])
         streams=[(5901,['-viewonly','-clip',f'{w}x{h}+0+0'])]
         if not cfg['ha']:streams.append((5902,[]))
         for port,extra in streams:
