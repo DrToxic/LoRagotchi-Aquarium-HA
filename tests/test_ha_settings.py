@@ -65,3 +65,24 @@ def test_ha_entrypoint_reads_existing_options_without_touching_data(tmp_path,mon
     nginx=entry.nginx_config(True)
     assert '9002' not in nginx and nginx.count('proxy_pass http://127.0.0.1:9001')==2
     assert 'allow 172.30.32.2; deny all;' in nginx
+
+
+def test_generated_profile_keeps_legacy_radio_identity_across_startup(tmp_path,monkeypatch):
+    from queue import Queue
+    from types import SimpleNamespace
+    from tank.connection import ConnectionProfile
+    from tank.service import Service
+    identity=ConnectionProfile(transport='meshcore',host='radio.invalid',port='5000')
+    identity.save(tmp_path/'rx-connection.json')
+    selected=Queue()
+    # Intercept before opening any transport; exercise real worker startup/profile loading.
+    monkeypatch.setattr(Service,'connect',lambda self,profile:selected.put(profile))
+    args=SimpleNamespace(database=Path(':memory:'),session='test',demo=None,replay=None,
+        connect='meshcore:radio.invalid:5000',token_file=None,
+        settings=tmp_path/'ha-render-settings.json')
+    for preset in ('low','high'):
+        render_settings({'graphics_preset':preset}).save(args.settings)
+        worker=Service(args)
+        try:assert selected.get(timeout=3).client_id==identity.client_id
+        finally:worker.close()
+    assert ConnectionProfile.load(tmp_path/'rx-connection.json').client_id==identity.client_id

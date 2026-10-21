@@ -307,7 +307,8 @@ in that optional mode do not require HA or the renderer to stay running.
 - `/data/share/loragotchi-tank/live.sqlite` retains the separate direct-RX
   collection/chat. Preview 2 does not silently merge or delete either source.
 - `/data/options.json` supplies the HA settings; the complete render profile is
-  regenerated in `/run/aquarium-settings.json` each startup.
+  regenerated in `/data/config/loragotchi-tank/ha-render-settings.json` each
+  startup, beside the persistent dedicated-RX client identity.
 - `/data/config/loragotchi-tank/` retains legacy graphics/layout preferences for
   rollback and the dedicated-RX non-secret stable client ID. HA ignores its
   saved visual preferences and deadzones.

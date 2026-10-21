@@ -88,7 +88,9 @@ def main():
          '--fps',str(cfg['fps']),'--no-vsync','--settings','/data/config/loragotchi-tank/settings.json']
     if cfg['ha']:
         from tank.ha_settings import render_settings
-        settings_path=Path('/run/aquarium-settings.json')
+        # Keep the dedicated-RX client identity in its existing sibling file.
+        # Never overwrite the former desktop settings.json (rollback).
+        settings_path=Path('/data/config/loragotchi-tank/ha-render-settings.json')
         render_settings(cfg['options']).save(settings_path)
         app=[sys.executable,'-m','tank','--managed-settings','--width',str(w),'--height',str(h),
              '--settings',str(settings_path)]

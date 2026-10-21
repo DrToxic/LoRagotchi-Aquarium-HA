@@ -43,6 +43,8 @@ def test_display_restart_preserves_backend_and_does_not_inherit_token(tmp_path,m
     assert all('SUPERVISOR_TOKEN' not in p.env for p in starts if not p.is_backend)
     renderer=next(p for p in starts if p.is_renderer)
     assert '--managed-settings' in renderer.command
+    settings=renderer.command[renderer.command.index('--settings')+1]
+    assert settings.endswith('data_config_loragotchi-tank_ha-render-settings.json')
     assert not any('127.0.0.1:9002' in p.command or '5902' in p.command for p in starts)
     assert '960x540x24' in next(p.command for p in starts if p.command[0]=='Xvfb')
     assert all(p.terminated or p.returncode is not None for p in starts)
