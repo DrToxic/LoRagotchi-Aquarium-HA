@@ -1,8 +1,8 @@
-# Home Assistant preview 4
+# Home Assistant preview 5
 
 The **same Python/Panda3D application** is rendered once in a container and
-streamed through noVNC. There is no second graphics implementation. `/view/`
-is aquarium-only and **server-enforced view-only**. On HAOS, all settings are
+streamed through noVNC. There is no second graphics implementation. The default
+HA Web UI and `/view/` are aquarium-only and **server-enforced view-only**. On HAOS, all settings are
 managed in the add-on Configuration tab; there is no operator window or deadzone
 feature. The old `/control/` route is a read-only compatibility alias. Multiple
 viewers share one running application and collection. Closing a browser does not
@@ -45,13 +45,12 @@ Extract `loragotchi_aquarium/` into Home Assistant's `addons` share (usually
 `/addons/loragotchi_aquarium` from the SSH app). In Settings → Apps/Add-ons →
 Store, refresh/check for updates, open **LoRagotchi Aquarium Preview** under
 Local apps, and install. Leave `mode: demo`, then start and open the Web UI.
-Select **View aquarium**. This preview is admin-only.
+The aquarium opens directly, without a launcher or overlay. This preview is admin-only.
 
 Supervisor supplies authentication and ingress; port 8099 is not published.
 Only its standard ingress proxy (`172.30.32.2`) is accepted by the container.
 The UI and WebSockets use relative paths so ingress's session path is preserved.
-Use **Web UI → Dashboard cards** for ingress-aware Lovelace configurations, as
-described below. Do not paste a temporary ingress URL into a dashboard.
+Use the **Lovelace dashboard cards** YAML below for ingress-aware embedding. Do not paste a temporary ingress URL into a dashboard.
 
 ## Settings in Home Assistant
 
@@ -86,9 +85,7 @@ chat stay in MeshCore / MeshCore Chat. Connection diagnostics are in **Logs**.
 
 ## Lovelace dashboard cards
 
-Preview 3 includes a **Dashboard cards** setup page in the add-on Web UI. It
-supplies copyable configurations, not a new renderer or an automatically
-installed dashboard resource. Reuse the open-source
+Reuse the open-source
 [Ingress webpage card](https://github.com/lovelylain/ha-addon-iframe-card), which
 resolves the installed add-on slug and creates/renews ingress sessions.
 
@@ -96,24 +93,28 @@ resolves the installed add-on slug and creates/renews ingress sessions.
    `https://github.com/lovelylain/ha-addon-iframe-card` as a custom **Dashboard**
    repository, then download it. Reload your HA browser page after installation.
 2. Open Aquarium's **Info** page in Settings → Apps/Add-ons. Its address has the
-   form `/hassio/addon/REPOSITORYPREFIX_loragotchi_aquarium/info`.
-3. Open Aquarium's Web UI → **Dashboard cards**, paste that Info URL or full
-   slug, and copy the desired YAML. The repository prefix varies with how the
-   app was installed; do not copy `loragotchi_aquarium` alone.
-4. Open your dashboard → Edit → Add card → Manual. Paste the YAML and save.
+   form `/hassio/addon/REPOSITORYPREFIX_loragotchi_aquarium/info`. Copy the full
+   slug including the repository prefix, not `loragotchi_aquarium` alone.
+3. Open your dashboard → Edit → Add card → Manual. Paste the YAML below with
+   your installed slug, then save.
 
 For example, replace `YOURPREFIX_loragotchi_aquarium` with your installed slug:
 
 ```yaml
 type: custom:addon-iframe-card
-title: Aquarium
 url: YOURPREFIX_loragotchi_aquarium/view/
 aspect_ratio: "56.25%"
 ```
 
-The default aspect ratio is 960×540 (56.25%). The setup page generates the ratio
-for your currently running output size. Regenerate the YAML after changing
-width/height. Old `/control/` cards still connect, but now show the same read-only
+The default ingress URL (a card with just the add-on slug) also opens directly to
+the aquarium. There is no launcher, toolbar or persistent overlay. For existing
+cards, remove the optional `title:` line if you also want to hide the card heading.
+
+The default aspect ratio is 960×540 (56.25%). Use `100 × height ÷ width` for the
+percentage after changing output dimensions. The optional card setup helper
+remains at the add-on-relative `setup.html` route and generates this ratio.
+Existing root `#cards` links redirect there; no setup UI appears over the aquarium.
+These are paths inside the add-on iframe, not the outer HA dashboard URL. Old `/control/` cards still connect, but now show the same read-only
 aquarium; update their ratio to match. All cards share one aquarium and collection.
 View-only is not a separate guest-access permission model.
 
@@ -125,7 +126,7 @@ port, long-lived token, or changes to MeshCore/Chat are needed for these cards.
 If HA says `Custom element doesn't exist: addon-iframe-card`, check the HACS
 installation/resource and reload the browser. If add-on lookup fails, verify
 the complete slug and administrator login. If the aquarium says Disconnected
-after an app restart, reload the dashboard. Preview 4 retains the existing
+after an app restart, reload the dashboard. Preview 5 retains the existing
 stream reconnect behavior; the setup page does not add transparent VNC recovery.
 
 The setup page is checked locally in Chromium at root and nested ingress-style
@@ -144,7 +145,7 @@ A **hybrid** is the practical extension: retain the app/container for rendering,
 SQLite and durable fish returns; add a HACS companion integration/card for
 entities, status, actions and a polished dashboard. This would need a supported,
 authenticated backend API and integration lifecycle work; it is not implemented
-in preview 4. The generic ingress card above already handles visual embedding.
+in preview 5. The generic ingress card above already handles visual embedding.
 
 A **HACS-only** product without a separate runtime is possible only with a
 substantial redesign, such as a browser renderer plus a properly asynchronous

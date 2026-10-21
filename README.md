@@ -2,7 +2,7 @@
 
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
-**Preview 4 · amd64 only · demo mode by default.** The original Python/Panda3D
+**Preview 5 · amd64 only · demo mode by default.** The original Python/Panda3D
 Aquarium runs in a container and streams to your browser. There is no separate
 browser renderer. All add-on settings live in Home Assistant’s Configuration
 tab; the native display has no operator window or deadzones.
@@ -19,13 +19,14 @@ tab; the native display has no operator window or deadzones.
 3. Refresh the store, open **LoRagotchi Aquarium Preview**, and select **Install**.
    This builds the container locally; the first installation can take several minutes.
 4. Keep **mode: demo**, then **Start → Open Web UI**. Optionally enable **Show in sidebar**.
-5. Choose **View aquarium**. Change graphics, names, decorations, animations and
+5. The aquarium opens directly, with no menu or controls over it. Change graphics,
+   names, decorations, animations and
    connection options in the add-on’s **Configuration** tab, then **Save → Restart**.
 
 Requires an Intel/AMD 64-bit (`amd64`) HA host. Raspberry Pi/HA Green ARM builds
 are not included. HA supplies authentication; the app is admin-only and does not
-publish a host port. For Lovelace, open **Web UI → Dashboard cards**. It generates
-card YAML for the separately installed HACS **Ingress webpage card**. See below;
+publish a host port. For Lovelace, use the YAML below with the separately installed HACS
+**Ingress webpage card**. See below;
 never save a temporary ingress URL as a permanent dashboard link.
 
 If you already installed the local ZIP preview, stop it before starting this
@@ -36,11 +37,23 @@ live data is not automatically migrated. Do not run two live intake consumers.
 
 1. Install [Ingress webpage card](https://github.com/lovelylain/ha-addon-iframe-card)
    through HACS and reload your Home Assistant browser page.
-2. Open **Aquarium Web UI → Dashboard cards**.
-3. Paste the add-on's Settings **Info page URL** or its full slug (including the
-   repository prefix). Copy the **Aquarium** YAML.
-4. In your dashboard, select **Edit → Add card → Manual**, paste, and save.
+2. Open Aquarium's **Info** page in Settings → Apps/Add-ons. Copy its full slug
+   from the URL, including the repository prefix.
+3. In your dashboard, select **Edit → Add card → Manual**, paste this YAML with
+   your installed slug, and save:
 
+```yaml
+type: custom:addon-iframe-card
+url: YOURPREFIX_loragotchi_aquarium/view/
+aspect_ratio: "56.25%"
+```
+
+Use `100 × height ÷ width` for the percentage if you changed the output dimensions.
+The optional card setup helper remains at the add-on-relative `setup.html` route;
+it is not part of the aquarium view.
+
+The default HA Web UI, root ingress cards and `/view/` all show only the aquarium,
+with no launcher, toolbar or persistent overlay. New card YAML has no title.
 The aquarium card uses the server-enforced view-only stream. Old controls cards
 now show that same read-only aquarium. The card handles ingress sessions
 using your HA login; no tokens, exposed ports, or saved temporary URLs are needed.
@@ -100,7 +113,8 @@ connection panel have local automated/fixture evidence. See
 A fixture is not Home Assistant or a physical radio. The owner reports preview 2
 works on their HA installation. That report does not establish every recovery
 or RF case. The owner also confirmed the preview-3 ingress card works.
-Preview 4 moves configuration into HA; its updated form still needs an on-device check.
+Preview 4 moved configuration into HA. Preview 5 makes the root Web UI aquarium-only;
+the latest update still needs an on-device check.
 
 The HA stream is now entirely read-only, including the old controls route.
 ARM builds, a bundled custom card, HA sensors, registry publishing,

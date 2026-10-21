@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0-preview.5
+
+- The HA Web UI and default ingress URL now open directly to the aquarium:
+  no launcher, navigation, controls or persistent overlay in Lovelace cards.
+- Existing `/view/` and `/control/` cards continue to show the read-only aquarium.
+- Card setup stays separate at `setup.html#cards`; old `#cards` links still work.
+  New card YAML omits the optional title for a clean display.
+- Receiver, fish data, graphics and HA Configuration options are unchanged.
+
 ## 0.3.0-preview.4
 
 - HA Configuration now owns graphics presets/overrides, resolution/FPS, fish

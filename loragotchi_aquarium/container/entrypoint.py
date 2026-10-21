@@ -57,7 +57,8 @@ http {
   add_header X-Content-Type-Options nosniff always;
   add_header Referrer-Policy no-referrer always;
   location = /health { auth_basic off; if ($remote_addr != 127.0.0.1) { return 403; } return 200 'ok'; }
-  location = / { try_files /index.html =404; }
+  location = / { try_files HOME_PAGE =404; }
+  location = /setup.html { try_files /index.html =404; }
   location = /view/ { try_files /screen.html =404; }
   location = /control/ { try_files /screen.html =404; }
   location = /presentation.json { add_header Cache-Control "no-store"; try_files /presentation.json =404; }
@@ -67,7 +68,7 @@ http {
   location / { return 404; }
  }
 }
-'''.replace('GUARD',guard).replace('127.0.0.1:9002', '127.0.0.1:9001' if ha else '127.0.0.1:9002').replace('WS','proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 3600s; proxy_buffering off;')
+'''.replace('HOME_PAGE', '/screen.html' if ha else '/index.html').replace('GUARD',guard).replace('127.0.0.1:9002', '127.0.0.1:9001' if ha else '127.0.0.1:9002').replace('WS','proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 3600s; proxy_buffering off;')
 
 
 def stop_processes(processes):

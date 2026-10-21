@@ -22,7 +22,7 @@ textarea{resize:vertical;line-height:1.5;min-height:8rem}label{display:block;mar
 <p class="managed-only" hidden>Manage aquarium settings in <strong>Home Assistant → Settings → Apps/Add-ons → LoRagotchi Aquarium → Configuration</strong>. Save, then restart the add-on to apply.</p>
 </section>
 <section id="cards" hidden>
-<a href="#">← Back to Aquarium</a>
+<a href="view/">← View aquarium</a>
 <h1 style="margin-top:1.5rem">Dashboard cards</h1>
 <p>Add the live aquarium to your Home Assistant dashboard. All cards show the same running Aquarium; they do not create another receiver.</p>
 <ol>
@@ -66,8 +66,8 @@ function updateCards(){
   const slug=getSlug(slugInput.value);feedback.textContent='';
   error.textContent=slug?'Ready to copy.':"Enter the full Aquarium add-on slug or its Settings Info page URL—not an ingress URL.";
   slugInput.setAttribute('aria-invalid',String(!slug&&slugInput.value.trim()!==''));
-  for(const [mode,title,ratio] of [['view','Aquarium',aspectRatio]]){
-    document.querySelector('#'+mode+'-yaml').value=slug?`type: custom:addon-iframe-card\ntitle: ${title}\nurl: ${slug}/${mode}/\naspect_ratio: "${ratio}"\n`:'';
+  for(const [mode,ratio] of [['view',aspectRatio]]){
+    document.querySelector('#'+mode+'-yaml').value=slug?`type: custom:addon-iframe-card\nurl: ${slug}/${mode}/\naspect_ratio: "${ratio}"\n`:'';
   }
   document.querySelectorAll('[data-copy]').forEach(button=>button.disabled=!slug);
 }

@@ -1,14 +1,22 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LoRagotchi Aquarium</title>
 <style>html,body,#screen{width:100%;height:100%;margin:0;overflow:hidden;background:#051a22}#state{position:absolute;inset:0;display:grid;place-items:center;color:#bfd9de;font:16px system-ui;pointer-events:none}#state:empty{display:none}</style></head><body><div id="screen"></div><div id="state">Connecting…</div>
 <script type="module">
-import RFB from '../novnc/core/rfb.js';
-const presentation=await fetch('../presentation.json',{cache:'no-store'}).then(response=>{if(!response.ok)throw Error('Presentation unavailable');return response.json()});
-const mode=presentation.managed||location.pathname.endsWith('/view/')?'view':'control';
-const endpoint=new URL('../ws/'+mode,location.href);endpoint.protocol=location.protocol==='https:'?'wss:':'ws:';
+// The ingress prefix is opaque. Resolve within it from either the add-on root
+// or an existing /view/ or /control/ card, never from the HA origin root.
+const subpage=/\/(view|control)\/$/.test(location.pathname);
+const base=new URL(subpage?'../':'./',location.href);
+if(location.hash==='#cards'){
+  location.replace(new URL('setup.html#cards',base));
+}else{
+const {default:RFB}=await import(new URL('novnc/core/rfb.js',base).href);
+const presentation=await fetch(new URL('presentation.json',base),{cache:'no-store'}).then(response=>{if(!response.ok)throw Error('Presentation unavailable');return response.json()});
+const mode=presentation.managed||!location.pathname.endsWith('/control/')?'view':'control';
+const endpoint=new URL('ws/'+mode,base);endpoint.protocol=location.protocol==='https:'?'wss:':'ws:';
 const state=document.querySelector('#state');
 const rfb=new RFB(document.querySelector('#screen'),endpoint.href);
 rfb.scaleViewport=true;rfb.resizeSession=false;rfb.viewOnly=mode==='view';rfb.showDotCursor=mode==='control';rfb.background='#051a22';
 rfb.addEventListener('connect',()=>{state.textContent='';document.body.dataset.connected='true'});
 rfb.addEventListener('disconnect',()=>{state.textContent='Disconnected. Reload to reconnect.';document.body.dataset.connected='false'});
 rfb.addEventListener('securityfailure',()=>state.textContent='Connection rejected.');
+}
 </script></body></html>
