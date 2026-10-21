@@ -1,4 +1,4 @@
-# Home Assistant preview 2
+# Home Assistant preview 3
 
 The **same Python/Panda3D application** is rendered once in a container and
 streamed through noVNC. There is no second graphics implementation. `/view/`
@@ -10,7 +10,8 @@ per-user desktop isolation.
 This preview targets **amd64 Linux**. HAOS and HA Container packaging are
 provided; actual Supervisor installation and physical radio coexistence must be
 checked on the owner's hardware. ARM64/Pi images are not claimed or published.
-No HACS component is installed or replaced, and no radio is automatically flashed.
+No HACS component is automatically installed or replaced, and no radio is
+automatically flashed. Optional dashboard embedding uses a separate HACS card.
 
 ## Try without a radio
 
@@ -48,11 +49,85 @@ Select **View aquarium** or **Open controls**. This preview is admin-only.
 Supervisor supplies authentication and ingress; port 8099 is not published.
 Only its standard ingress proxy (`172.30.32.2`) is accepted by the container.
 The UI and WebSockets use relative paths so ingress's session path is preserved.
-Use the app's sidebar/Web UI first. A persistent Lovelace embed needs a proper
-HA ingress-aware panel/card; do not paste a temporary ingress session URL into
-a dashboard. This package does **not** yet include that custom card.
+Use **Web UI → Dashboard cards** for ingress-aware Lovelace configurations, as
+described below. Do not paste a temporary ingress URL into a dashboard.
 
-### Home Assistant Container / independent Docker host
+## Lovelace dashboard cards
+
+Preview 3 includes a **Dashboard cards** setup page in the add-on Web UI. It
+supplies copyable configurations, not a new renderer or an automatically
+installed dashboard resource. Reuse the open-source
+[Ingress webpage card](https://github.com/lovelylain/ha-addon-iframe-card), which
+resolves the installed add-on slug and creates/renews ingress sessions.
+
+1. Install **Ingress webpage card** from HACS. If necessary, add
+   `https://github.com/lovelylain/ha-addon-iframe-card` as a custom **Dashboard**
+   repository, then download it. Reload your HA browser page after installation.
+2. Open Aquarium's **Info** page in Settings → Apps/Add-ons. Its address has the
+   form `/hassio/addon/REPOSITORYPREFIX_loragotchi_aquarium/info`.
+3. Open Aquarium's Web UI → **Dashboard cards**, paste that Info URL or full
+   slug, and copy the desired YAML. The repository prefix varies with how the
+   app was installed; do not copy `loragotchi_aquarium` alone.
+4. Open your dashboard → Edit → Add card → Manual. Paste the YAML and save.
+
+For example, replace `YOURPREFIX_loragotchi_aquarium` with your installed slug:
+
+```yaml
+type: custom:addon-iframe-card
+title: Aquarium
+url: YOURPREFIX_loragotchi_aquarium/view/
+aspect_ratio: "56.25%"
+```
+
+Optional full operator desktop:
+
+```yaml
+type: custom:addon-iframe-card
+title: Aquarium controls
+url: YOURPREFIX_loragotchi_aquarium/control/
+aspect_ratio: "53.63%"
+```
+
+These ratios match the default 960×540 scene and 1432×768 operator desktop.
+Change the ratio if you change the render size. Use a wide section or a panel
+view for the operator card. All viewers share one aquarium and collection;
+multiple operator cards share the same controls. The view-only endpoint rejects
+input at the server, but is not a separate guest-access permission model.
+
+This route requires **HAOS/Supervisor and an HA administrator account**. A plain
+Webpage card cannot renew Supervisor ingress authentication by itself. Do not
+paste temporary `/api/hassio_ingress/...` URLs or credentials into YAML. No host
+port, long-lived token, or changes to MeshCore/Chat are needed for these cards.
+
+If HA says `Custom element doesn't exist: addon-iframe-card`, check the HACS
+installation/resource and reload the browser. If add-on lookup fails, verify
+the complete slug and administrator login. If the aquarium says Disconnected
+after an app restart, reload the dashboard. Preview 3 retains the existing
+stream reconnect behavior; the setup page does not add transparent VNC recovery.
+
+The setup page is checked locally in Chromium at root and nested ingress-style
+paths, including clipboard fallback. Actual Lovelace, HA Companion apps and
+Supervisor session renewal still require a test on the installed HA host.
+
+### Could the Aquarium become a HACS integration?
+
+HACS distributes custom integrations and dashboard resources, not this
+Supervisor app's OS container. The current Aquarium needs Panda3D, Xvfb, VNC,
+websockify and nginx; copying Python files into HA Core does not supply that
+runtime. Keep these processes outside HA Core.
+
+A **hybrid** is the practical extension: retain the app/container for rendering,
+SQLite and durable fish returns; add a HACS companion integration/card for
+entities, status, actions and a polished dashboard. This would need a supported,
+authenticated backend API and integration lifecycle work; it is not implemented
+in preview 3. The generic ingress card above already handles visual embedding.
+
+A **HACS-only** product without a separate runtime is possible only with a
+substantial redesign, such as a browser renderer plus a properly asynchronous
+HA integration for fish handling/storage. It is not a packaging conversion and
+would diverge from this project's single native graphics implementation.
+
+## Home Assistant Container / independent Docker host
 
 Run the Aquarium as a **sibling container**, not inside HA Core. In its checkout:
 
@@ -243,8 +318,9 @@ a display failure. The HA receiver has its own supervised process and is not
 stopped by a display restart. Backend failure is retried separately; accepted
 work resumes from the journal. The entire container/HA stopping still interrupts
 processing, and the HTTP health check describes presentation health only.
-Basic aggregate HA sensors/automations, a Lovelace ingress card, ARM builds,
-registry publishing and OTA firmware updates are **not part of preview 2**.
+Basic aggregate HA sensors/automations, a bundled custom card, ARM builds,
+registry publishing and OTA firmware updates are **not part of preview 3**.
+Lovelace embedding uses the separate HACS Ingress webpage card described above.
 
 
 ## Verification boundary for preview 2

@@ -2,7 +2,7 @@
 
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
-**Preview 2 · amd64 only · demo mode by default.** The original Python/Panda3D
+**Preview 3 · amd64 only · demo mode by default.** The original Python/Panda3D
 Aquarium runs in a container and streams to your browser. There is no separate
 browser renderer: the aquarium view and full operator controls use the same
 native application, graphics, fish and saved collection.
@@ -24,12 +24,31 @@ native application, graphics, fish and saved collection.
 
 Requires an Intel/AMD 64-bit (`amd64`) HA host. Raspberry Pi/HA Green ARM builds
 are not included. HA supplies authentication; the app is admin-only and does not
-publish a host port. Use the sidebar/Web UI first: a persistent Lovelace ingress
-card is not included, and temporary ingress URLs are not permanent dashboard links.
+publish a host port. For Lovelace, open **Web UI → Dashboard cards**. It generates
+card YAML for the separately installed HACS **Ingress webpage card**. See below;
+never save a temporary ingress URL as a permanent dashboard link.
 
 If you already installed the local ZIP preview, stop it before starting this
 repository-installed copy. They have separate HA app data directories; existing
 live data is not automatically migrated. Do not run two live intake consumers.
+
+## Lovelace dashboard cards
+
+1. Install [Ingress webpage card](https://github.com/lovelylain/ha-addon-iframe-card)
+   through HACS and reload your Home Assistant browser page.
+2. Open **Aquarium Web UI → Dashboard cards**.
+3. Paste the add-on's Settings **Info page URL** or its full slug (including the
+   repository prefix). Copy **Aquarium** or optional **Operator controls** YAML.
+4. In your dashboard, select **Edit → Add card → Manual**, paste, and save.
+
+The aquarium card uses the server-enforced view-only stream. Controls remain
+interactive and work best in a wide/panel view. The card handles ingress sessions
+using your HA login; no tokens, exposed ports, or saved temporary URLs are needed.
+This Supervisor route requires an administrator account. The external card is
+installed through HACS, not automatically by Aquarium. Both cards display the
+same running native application; they do not create another receiver.
+
+See [examples and HACS architecture](docs/HOME_ASSISTANT.md#lovelace-dashboard-cards).
 
 ## Home Assistant Container / Docker
 
@@ -78,11 +97,13 @@ See the [setup and recovery guide](docs/HOME_ASSISTANT.md) before a one-fish tri
 The HA receiver, WebSocket adapter, durable restart handling and native managed
 connection panel have local automated/fixture evidence. See
 [the exact preview-2 validation boundary](docs/HOME_ASSISTANT.md#verification-boundary-for-preview-2).
-A fixture is not Home Assistant or a physical radio. The new image still needs
-an actual HAOS build/token-access check and a controlled fish visit/return trial.
+A fixture is not Home Assistant or a physical radio. The owner reports preview 2
+works on their HA installation. That report does not establish every recovery
+or RF case. Preview 3 adds only dashboard setup; its
+actual Lovelace/Supervisor embedding still needs an on-device check.
 
 The unchanged browser streaming/access boundary retains preview-1 test evidence.
-ARM builds, persistent Lovelace ingress cards, HA sensors, registry publishing,
+ARM builds, a bundled custom card, HA sensors, registry publishing,
 automatic upstream graphics sync and firmware updating remain outside this preview.
 
 ## One graphics source

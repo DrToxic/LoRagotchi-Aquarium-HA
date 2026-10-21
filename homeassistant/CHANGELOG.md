@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0-preview.3
+
+- Dashboard cards setup page in the Web UI generates aquarium-only and optional
+  operator card YAML from the installed add-on slug or Info page URL.
+- Reuses the separately installed HACS Ingress webpage card for managed ingress
+  sessions; no temporary URLs, extra ports, or dashboard configuration writes.
+- Native renderer, stream security, receiver, database, and dependencies unchanged.
+- Setup-page browser checks are local; actual Lovelace/Supervisor embedding still
+  needs validation on the installed HA instance.
+
 ## 0.3.0-preview.2
 
 - New `home_assistant` mode shares the existing MeshCore integration through HA

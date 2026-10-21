@@ -1,5 +1,5 @@
 name: LoRagotchi Aquarium Preview
-version: "0.3.0-preview.2"
+version: "0.3.0-preview.3"
 slug: loragotchi_aquarium
 description: Native LoRagotchi aquarium and operator controls streamed into Home Assistant
 url: https://github.com/DrToxic/LoRagotchi-Aquarium-HA

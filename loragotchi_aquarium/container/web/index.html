@@ -1,4 +1,77 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LoRagotchi Aquarium</title>
-<style>html,body{margin:0;background:#051a22;color:#d0e6e8;font:15px system-ui;height:100%}main{min-height:100%;display:grid;place-content:center;gap:1rem;padding:0 2rem}h1{font-size:1.6rem;margin:0}p{max-width:34rem;color:#91adb5;line-height:1.6}a{display:block;background:#12343f;color:#b6eee3;text-decoration:none;border:1px solid #2d5b65;border-radius:8px;padding:1rem}small{color:#91adb5}</style></head>
-<body><main><h1>LoRagotchi Aquarium</h1><p>The native aquarium, here in your browser.</p><a href="view/">View aquarium <small>— display only</small></a><a href="control/">Open controls <small>— full operator desktop</small></a></main></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LoRagotchi Aquarium</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#051a22;color:#d0e6e8;font:15px system-ui}
+main{max-width:46rem;margin:auto;padding:3rem 1.5rem}h1{font-size:1.6rem;margin:0}h2{font-size:1.15rem;margin-top:1.8rem}
+p,li{color:#91adb5;line-height:1.6}li{margin:.5rem 0}a{color:#b6eee3}nav{display:grid;gap:1rem;margin-top:1.5rem}
+nav a,button{background:#12343f;color:#b6eee3;text-decoration:none;border:1px solid #2d5b65;border-radius:8px;padding:1rem}
+small{color:#91adb5}button{font:inherit;cursor:pointer;padding:.7rem 1rem}button:disabled{opacity:.5;cursor:default}
+input,textarea{display:block;width:100%;background:#091f28;color:#d0e6e8;border:1px solid #2d5b65;border-radius:6px;padding:.8rem;margin:.6rem 0;font:14px ui-monospace,monospace}
+textarea{resize:vertical;line-height:1.5;min-height:8rem}label{display:block;margin-top:1.5rem}code{overflow-wrap:anywhere}
+:focus-visible{outline:2px solid #b6eee3;outline-offset:3px}[hidden]{display:none!important}#feedback{min-height:1.6em}#slug-error{color:#f0ba98;min-height:1.6em}
+</style>
+</head>
+<body><main>
+<section id="home">
+<h1>LoRagotchi Aquarium</h1><p>The native aquarium, here in your browser.</p>
+<nav aria-label="Aquarium"><a href="view/">View aquarium <small>— display only</small></a><a href="control/">Open controls <small>— full operator desktop</small></a><a href="#cards">Dashboard cards <small>— add Aquarium to Lovelace</small></a></nav>
+</section>
+<section id="cards" hidden>
+<a href="#">← Back to Aquarium</a>
+<h1 style="margin-top:1.5rem">Dashboard cards</h1>
+<p>Add the live aquarium or operator controls to your Home Assistant dashboard. Both show this same running Aquarium; they do not create another receiver.</p>
+<ol>
+<li>Install <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=lovelylain&amp;repository=ha-addon-iframe-card" target="_blank" rel="noopener noreferrer">Ingress webpage card in HACS</a>, then reload your Home Assistant browser page. If needed, add <code>https://github.com/lovelylain/ha-addon-iframe-card</code> as a custom Dashboard repository in HACS.</li>
+<li>Open this add-on's <strong>Info</strong> page in Settings → Apps/Add-ons. Copy its page URL or the full slug from it, including the repository prefix. This is not the aquarium Web UI / ingress URL.</li>
+<li>Paste it below. In your dashboard, choose <strong>Edit → Add card → Manual</strong> and paste the generated YAML.</li>
+</ol>
+<label for="slug">Add-on slug or Info page URL</label>
+<input id="slug" placeholder="xxxxxxxx_loragotchi_aquarium" autocomplete="off" spellcheck="false" aria-describedby="slug-error">
+<p id="slug-error" role="status">Enter your installed add-on's slug to generate the cards.</p>
+<h2>Aquarium · view only</h2>
+<p>The scene without operator controls. A wide dashboard section works best.</p>
+<textarea id="view-yaml" aria-label="Aquarium card YAML" readonly spellcheck="false"></textarea>
+<button type="button" data-copy="view-yaml" disabled>Copy aquarium card</button>
+<h2>Operator controls · optional</h2>
+<p>The full interactive desktop. Use a wide or panel dashboard view; controls are cramped on a phone.</p>
+<textarea id="control-yaml" aria-label="Operator card YAML" readonly spellcheck="false"></textarea>
+<button type="button" data-copy="control-yaml" disabled>Copy controls card</button>
+<p id="feedback" role="status" aria-live="polite"></p>
+<p><small>Home Assistant OS / Supervisor and an administrator account are required for this route. The card manages ingress sessions using your HA login—do not paste tokens or temporary <code>/api/hassio_ingress/…</code> URLs. The view stream rejects input, but this does not give a user guest-only access to the add-on. The card is installed separately through HACS; this page does not change your dashboard or install anything.</small></p>
+<p><small>Docker / HA Container users: use the built-in Webpage card with your configured authenticated HTTPS aquarium URL ending in <code>/view/</code> or <code>/control/</code>, not these Supervisor cards.</small></p>
+</section>
+</main>
+<script>
+const slugInput=document.querySelector('#slug');
+const error=document.querySelector('#slug-error');
+const feedback=document.querySelector('#feedback');
+function showPage(){const cards=location.hash==='#cards';document.querySelector('#home').hidden=cards;document.querySelector('#cards').hidden=!cards;}
+addEventListener('hashchange',showPage);showPage();
+function getSlug(value){
+  value=value.trim();
+  if(value.startsWith('/')||/^https?:\/\//i.test(value)){
+    try{const url=new URL(value,location.origin);const match=url.pathname.match(/^\/hassio\/addon\/([\w-]+)\/(?:info|config|logs|documentation)\/?$/);value=match?match[1]:'';}catch{return '';}
+  }
+  return /^[A-Za-z0-9_-]+_loragotchi_aquarium$/.test(value)&&value.length<=128?value:'';
+}
+function updateCards(){
+  const slug=getSlug(slugInput.value);feedback.textContent='';
+  error.textContent=slug?'Ready to copy.':"Enter the full Aquarium add-on slug or its Settings Info page URL—not an ingress URL.";
+  slugInput.setAttribute('aria-invalid',String(!slug&&slugInput.value.trim()!==''));
+  for(const [mode,title,ratio] of [['view','Aquarium','56.25%'],['control','Aquarium controls','53.63%']]){
+    document.querySelector('#'+mode+'-yaml').value=slug?`type: custom:addon-iframe-card\ntitle: ${title}\nurl: ${slug}/${mode}/\naspect_ratio: "${ratio}"\n`:'';
+  }
+  document.querySelectorAll('[data-copy]').forEach(button=>button.disabled=!slug);
+}
+slugInput.addEventListener('input',updateCards);
+document.querySelectorAll('[data-copy]').forEach(button=>button.addEventListener('click',async()=>{
+  const field=document.getElementById(button.dataset.copy);
+  try{await navigator.clipboard.writeText(field.value);feedback.textContent='Copied. Paste into a Manual card in your dashboard.';}
+  catch{field.focus();field.select();feedback.textContent='YAML selected. Use Copy in your browser, then paste into a Manual card.';}
+}));
+</script>
+</body></html>
