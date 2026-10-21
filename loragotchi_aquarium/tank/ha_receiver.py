@@ -156,7 +156,7 @@ class Receiver:
             genes = msg.appearance or ('M', 6, 6, 6, 65535)
             snapshot = Snapshot(self.rx, visit['id'], owner, msg.fish, msg.tx, visit['stage'],
                                 *genes, msg.appearance is not None, visit['name'])
-            self.store.save_in_transaction(snapshot)
+            self.store.save_in_transaction(snapshot, now=now)
             self.db.execute("UPDATE ha_visits SET state='captured' WHERE id=?", (visit['id'],))
             self.db.execute("UPDATE ha_jobs SET state='superseded' WHERE visit=? AND op='ACK'", (visit['id'],))
             self._job(visit, 'ARRIVED')

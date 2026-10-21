@@ -50,6 +50,9 @@ configuration:
   show_names:
     name: Fish name labels
     description: Show names above swimming fish.
+  fish_lifespan_hours:
+    name: Fish lifespan (hours)
+    description: "0 disables expiry (default). Otherwise copies expire after this many hours since their last new share. Fractions allowed; 24 = one day, 168 = one week, maximum 8760. History is retained; original pets and returns are unchanged. Save and restart to apply."
   fish_animations:
     name: Arrival and departure animations
     description: Animate new fish, appearance updates and departures. This affects visuals only, not stored copies or radio returns.

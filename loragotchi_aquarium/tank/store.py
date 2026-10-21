@@ -2,10 +2,14 @@
 from dataclasses import asdict
 import json
 import sqlite3
+import time
+from datetime import datetime, timezone
+from .expiry import display_state, timestamp
 from .protocol import Snapshot, ReturnStatus, ProtocolError
 
 class Store:
-    def __init__(self, path, session="community"):
+    def __init__(self, path, session="community", clock=None):
+        self.clock = clock or time.time
         self.session = session
         self.db = sqlite3.connect(str(path))
         self.db.execute("PRAGMA journal_mode=WAL")
@@ -24,8 +28,9 @@ class Store:
         with self.db:
             return self.save_in_transaction(event)
 
-    def save_in_transaction(self, event):
+    def save_in_transaction(self, event, now=None):
         """Caller owns the commit, including any durable protocol reply jobs."""
+        accepted = datetime.fromtimestamp(self.clock() if now is None else now, timezone.utc).isoformat()
         body = json.dumps(asdict(event), sort_keys=True)
         old = self.db.execute("SELECT body FROM events WHERE rx=? AND event=?", (event.rx, event.event_id)).fetchone()
         if old:
@@ -45,18 +50,27 @@ class Store:
                 # RX replay must never roll a newer share backwards.
                 if prev["rx"] == event.rx and prev["event_id"] > event.event_id:
                     return False
-            self.db.execute("INSERT INTO fish(session,owner,rx,event,body) VALUES(?,?,?,?,?) "
-                "ON CONFLICT(session,owner) DO UPDATE SET rx=excluded.rx,event=excluded.event,body=excluded.body,updated=CURRENT_TIMESTAMP",
-                (self.session,event.owner,event.rx,event.event_id,json.dumps(appearance)))
+            self.db.execute("INSERT INTO fish(session,owner,rx,event,body,updated) VALUES(?,?,?,?,?,?) "
+                "ON CONFLICT(session,owner) DO UPDATE SET rx=excluded.rx,event=excluded.event,body=excluded.body,updated=excluded.updated",
+                (self.session,event.owner,event.rx,event.event_id,json.dumps(appearance),accepted))
             self.db.execute("DELETE FROM hidden WHERE session=? AND owner=?", (self.session,event.owner))
         elif isinstance(event, ReturnStatus):
             self.db.execute("INSERT INTO returns VALUES(?,?,?,?) ON CONFLICT(rx,snapshot) DO UPDATE SET status=excluded.status,attempts=excluded.attempts",
                             (event.rx,event.snapshot_id,event.status,event.attempts))
         return True
 
-    def roster(self):
-        rows=self.db.execute("SELECT body FROM fish WHERE session=? AND owner NOT IN (SELECT owner FROM hidden WHERE session=?) ORDER BY owner",(self.session,self.session))
-        return [Snapshot(**json.loads(row[0])) for row in rows]
+    def collection(self):
+        """Non-manually-hidden copies, including expired ones and their original time."""
+        rows = self.db.execute("SELECT body,updated FROM fish WHERE session=? AND owner NOT IN "
+                               "(SELECT owner FROM hidden WHERE session=?) ORDER BY owner",
+                               (self.session,self.session))
+        return [(Snapshot(**json.loads(body)), timestamp(updated)) for body, updated in rows]
+
+    def display_state(self, hours=0, now=None):
+        return display_state(self.collection(), hours, self.clock() if now is None else now)
+
+    def roster(self, hours=0, now=None):
+        return self.display_state(hours, now)['fish']
 
     def remove(self, owner):
         with self.db:

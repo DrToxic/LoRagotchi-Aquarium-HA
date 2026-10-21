@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 from .settings import Settings, PRESETS
 from .appearance import Appearance
+from .expiry import validate_hours
 
 
 def boolean(value, name):
@@ -18,6 +19,7 @@ def boolean(value, name):
 
 def render_settings(options):
     settings = Settings()
+    settings.fish_lifespan_hours = validate_hours(options.get('fish_lifespan_hours', 0))
     preset = options.get('graphics_preset', 'balanced')
     if preset not in PRESETS:
         raise ValueError('Unknown graphics_preset')

@@ -18,6 +18,9 @@ def package(output):
         shutil.copy2(ROOT/'homeassistant/config.yaml.in',folder/'config.yaml')
         shutil.copytree(ROOT/'homeassistant/translations',folder/'translations')
         shutil.copy2(ROOT/'docs/HOME_ASSISTANT.md',folder/'DOCS.md')
+        (folder/'docs').mkdir()
+        shutil.copy2(ROOT/'docs/FISH-LIFESPAN.md',folder/'docs/FISH-LIFESPAN.md')
+        shutil.copy2(ROOT/'docs/FISH-LIFESPAN.md',folder/'FISH-LIFESPAN.md')
         shutil.copy2(ROOT/'homeassistant/CHANGELOG.md',folder/'CHANGELOG.md')
         with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(folder.rglob('*')):

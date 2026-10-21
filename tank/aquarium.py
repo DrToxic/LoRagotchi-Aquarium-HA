@@ -28,6 +28,8 @@ class Aquarium(ShowBase):
     def __init__(self,args):
         self.args=args;self.managed=getattr(args,"managed_settings",False)
         self.streaming=self.managed or getattr(args,"stream_layout",False);self.settings=Settings.load(args.settings)
+        args.fish_lifespan_hours=self.settings.fish_lifespan_hours
+        self.lifespan={}
         for warning in self.settings.load_warnings:print('Settings: '+warning,flush=True)
         self.display_path=Path(args.settings).with_name('display-layout.json')
         self.display=DisplayProfile() if self.managed else DisplayProfile.load(self.display_path)
@@ -409,6 +411,11 @@ class Aquarium(ShowBase):
                 kind=event.get("kind")
                 if kind=="roster":
                     new=event["fish"]
+                    self.lifespan=event.get("lifespan",{})
+                    summary=(self.lifespan.get('hours',0),len(new),self.lifespan.get('expired',0),self.lifespan.get('undated',0))
+                    if self.managed and summary!=getattr(self,'_lifespan_summary',None):
+                        self._lifespan_summary=summary
+                        print(f"Fish lifespan: {summary[0]:g}h (0=off); {summary[1]} active, {summary[2]} expired retained, {summary[3]} undated retained",flush=True)
                     if event.get("mode",self.mode)!=self.mode:
                         # Switching demo/replay to live never leaves synthetic
                         # fish performing departures over the live collection.
@@ -438,6 +445,7 @@ class Aquarium(ShowBase):
         space_note=f" · {waiting} waiting for swim space" if waiting else ""
         moving=len(self.transitions.arrivals)+len(self.transitions.departures)
         if moving:space_note+=f" · {moving} in transition"
+        if self.lifespan.get("expired"):space_note+=f" · {self.lifespan['expired']} expired"
         if hasattr(self,"footer"):self.set_ui_text(self.footer,f"{len(self.roster)} shared fish{space_note}\n{self.status}")
         now=time.monotonic()
         if self.panel_visible and now>=self._next_ui_update:

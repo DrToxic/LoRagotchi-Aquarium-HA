@@ -13,6 +13,7 @@ import time
 from .ha_api import HAClient, HAError, companions, select_companion, resolve_sender
 from .ha_receiver import Receiver, parse
 from .store import Store
+from .expiry import display_state, validate_hours
 
 LOG = logging.getLogger('aquarium.ha')
 EVENTS = ('meshcore_message', 'meshcore_message_sent', 'meshcore_connected',
@@ -22,7 +23,8 @@ EVENTS = ('meshcore_message', 'meshcore_message_sent', 'meshcore_connected',
 class Backend:
     PACE = 2
     RECONNECT = 5
-    def __init__(self, store, url, token, entry='', receive=False, environment_file=None):
+    def __init__(self, store, url, token, entry='', receive=False, environment_file=None, fish_lifespan_hours=0):
+        self.fish_lifespan_hours = validate_hours(fish_lifespan_hours)
         self.store, self.url, self.token = store, url, token
         self.requested_entry, self.receive = entry, receive
         self.receiver = self.api = self.companion = None
@@ -169,11 +171,14 @@ class Backend:
             await asyncio.sleep(self.RECONNECT)
 
     def snapshot(self):
+        records = self.store.collection()
+        state = display_state(records, self.fish_lifespan_hours)
         return dict(status=self.status, online=self.online, receive=self.receive,
                     companion=self.companion, available=self.available,
                     last_message=self.last_message,
                     returns=self.receiver.summary() if self.receiver else dict(pending=0,unresolved=0,delivered=0),
-                    fish=[asdict(fish) for fish in self.store.roster()])
+                    fish=[asdict(fish) for fish in state['fish']], lifespan=state['lifespan'],
+                    collection=[dict(snapshot=asdict(fish), shared_at=shared) for fish, shared in records])
 
     async def ipc(self, reader, writer):
         try:
@@ -187,6 +192,8 @@ class Backend:
             elif action == 'retry_returns':
                 if not self.receive or not self.receiver: raise ValueError('Fish intake is disabled')
                 self.receiver.retry_returns()
+            elif action == 'lifespan':
+                self.fish_lifespan_hours = validate_hours(request.get('hours'))
             elif action != 'snapshot': raise ValueError('Unsupported operator action')
             result = self.snapshot()
         except Exception:
@@ -205,7 +212,8 @@ async def serve(args, token):
     lock = open(str(args.database) + '.ha.lock', 'a')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     store = Store(args.database, args.session)
-    backend = Backend(store, args.url, token, args.entry, args.receive, getattr(args,"environment_file",None))
+    backend = Backend(store, args.url, token, args.entry, args.receive, getattr(args,"environment_file",None),
+                      getattr(args,"fish_lifespan_hours",0))
     socket_path = Path(args.socket)
     socket_path.parent.mkdir(parents=True, exist_ok=True)
     if socket_path.exists(): socket_path.unlink()  # stale private socket after a crash, lock acquired
@@ -235,6 +243,7 @@ def main():
     parser.add_argument('--receive', action='store_true')
     parser.add_argument('--token-file', type=Path)
     parser.add_argument('--environment-file', type=Path)
+    parser.add_argument('--fish-lifespan-hours', type=float, default=0)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
     # No tokens on argv, IPC, browser pages, data snapshots or disk-generated configs.

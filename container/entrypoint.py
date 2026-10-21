@@ -111,6 +111,7 @@ def main():
         backend_command=[sys.executable,'-m','tank.ha_backend',
                          '--database','/data/share/loragotchi-tank/ha-live.sqlite',
                          '--socket','/run/aquarium/ha.sock','--url',cfg['url'],'--entry',cfg['entry']]
+        if cfg['ha']: backend_command+=['--fish-lifespan-hours',str(profile.fish_lifespan_hours)]
         if cfg['receive']: backend_command+=['--receive']
         if not cfg['ha']: backend_command+=['--token-file',cfg['token_file']]
     else:

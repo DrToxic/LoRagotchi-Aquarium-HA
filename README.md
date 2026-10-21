@@ -2,10 +2,17 @@
 
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
-**Preview 6 · amd64 only · demo mode by default.** The original Python/Panda3D
+**Preview 7 · amd64 only · demo mode by default.** The original Python/Panda3D
 Aquarium runs in a container and streams to your browser. There is no separate
 browser renderer. All add-on settings live in Home Assistant’s Configuration
 tab; the native display has no operator window or deadzones.
+
+## Preview 7 configurable fish lifespan
+
+Configuration → **Fish lifespan (hours)**: `0` is off (default), `24` is a day,
+`168` is a week. Save + Restart. New shares renew copies; duplicate packets and
+restarts do not. Expiry animates departures while preserving history and pending
+radio returns. [Behavior and testing](docs/FISH-LIFESPAN.md).
 
 ## Preview 6 appearance controls
 

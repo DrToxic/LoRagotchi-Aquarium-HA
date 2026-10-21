@@ -388,3 +388,12 @@ These are host/fixture results, **not** an actual Supervisor or physical RF tria
 Local container/browser checks qualify the packaged process and access boundary,
 not Supervisor itself. Actual HAOS installation/token access and a controlled
 one-fish trial remain required before calling the new integration hardware-proven.
+
+## Optional fish-copy lifespan (preview 7)
+
+Set **Fish lifespan (hours)** in Configuration: `0` disables expiry, `24` is a
+day, `168` is a week; fractional hours are supported up to `8760`. Save + Restart.
+New shares renew copies; duplicates and restarts do not. Existing timestamps
+are honored, so older copies may already be expired when enabled. History is
+retained, manual hiding stays separate, and pending radio returns continue.
+See [Fish lifespan](FISH-LIFESPAN.md) for full semantics and a short demo test.

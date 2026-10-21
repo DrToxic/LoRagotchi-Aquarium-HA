@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0-preview.7
+
+- Optional fish-copy lifespan in hours (0/off by default, fractions through 8760).
+- Persisted UTC share time; new shares renew, duplicate COMMITs/replays/restarts do not.
+- Expired copies animate out; history retained, manual hiding stays separate.
+- Known deadlines continue during backend outages; pending original-pet returns
+  remain independent. Logs report active/expired/undated counts.
+- Existing databases keep their timestamps. No native operator, firmware, HACS
+  or radio configuration change. Save + Restart to apply the HA option.
+
 ## 0.3.0-preview.6
 
 - Added HA-owned appearance options: light strengths, clock/HA-sun day/night,
