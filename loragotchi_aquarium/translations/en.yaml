@@ -105,6 +105,19 @@ configuration:
   radio_control:
     name: Legacy radio write permission
     description: Retained for existing configurations. No radio configuration UI is exposed by this add-on. Use MeshCore or MeshCore Chat for radio settings.
+  nursery:
+    name: Breeding cave and local nursery
+    description: Optional local eggs only. Existing eggs survive disabling or a lower capacity. DX egg transfer is not connected.
+    fields:
+      enabled:
+        name: Show breeding cave and nursery
+      automatic:
+        name: Automatically pair visiting adults
+        description: Creates local eggs only when two unchanged adult visitors can reach the cave.
+      capacity:
+        name: Maximum stored eggs (1–12)
+      cooldown_minutes:
+        name: Rest between breeding for each parent (minutes)
   appearance:
     name: Appearance, day/night and bubble columns
     description: Save and restart to apply. Automatic lighting then runs continuously. Performance settings stay separate.
@@ -193,6 +206,22 @@ configuration:
       plant_speed:
         name: "Sway speed"
         description: "Sway speed multiplier; 0 disables this effect."
+      bubble_collisions:
+        name: Bubble obstacle deflection
+        description: Bubbles slide around solid scenery. Disable for a lighter renderer workload.
+      bubble_dynamics:
+        name: Varied bubble movement
+      background_motion:
+        name: Animated water pattern
+        description: Off, soft light rays, or horizontal ripples behind the fish.
+      background_speed:
+        name: Water pattern speed
+        description: Zero freezes the pattern; independent from caustics and day/night lighting.
+      background_strength:
+        name: Water pattern intensity
+      fish_activity:
+        name: Fish activity
+        description: Off, gentle, or lively. Local movement only; never changes pet state.
       column_count:
         name: "Column count"
         description: "Requested columns (0–16). Zero disables columns, not ambient bubbles. Invalid sites are skipped."

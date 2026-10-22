@@ -74,6 +74,10 @@ class Aquarium(ShowBase):
         self.decorations=DecorationLibrary(self)
         self.appearance=AppearanceScene(self)
         self.columns=BubbleColumns(self)
+        from .bubble_physics import BubbleObstacles
+        self.bubble_obstacles=BubbleObstacles(self.sim.physics)
+        from .nursery_scene import NurseryScene
+        self.nursery=NurseryScene(self)
         self.rebuild_scene()
         for i in range(self.start_windows):
             self.add_window(self.restore_rectangles[i] if self.restore_rectangles else None)
@@ -109,6 +113,7 @@ class Aquarium(ShowBase):
         if hasattr(self,"decor"):self.decor.removeNode()
         self.decor=self.scene.attachNewNode("scenery")
         self.plants,self.caustic=scenery(self.decor,self.settings,self.scenery_objects)
+        self.nursery.bind(self.scenery_objects)
         self.scenery_objects.finish(self.decor)
         # Background gradient plane in world space.
         verts=[((-35,13,-1),(0,-1,0),(.015,.065,.10,1),(0,0)),((35,13,-1),(0,-1,0),(.015,.065,.10,1),(1,0)),
@@ -119,7 +124,7 @@ class Aquarium(ShowBase):
             ray=mesh("light-shaft",[((x,10,18),(0,-1,0),(.25,.53,.51,.025),(0,1)),((x-5,10,0),(0,-1,0),(.25,.53,.51,0),(0,0)),((x+4,10,0),(0,-1,0),(.25,.53,.51,0),(1,0)),((x+1,10,18),(0,-1,0),(.25,.53,.51,.055),(1,1))],[(0,1,2),(0,2,3)])
             self.light_shafts.append(ray)
             ray.reparentTo(self.decor);ray.setTransparency(TransparencyAttrib.MAlpha);ray.setLightOff();ray.setDepthWrite(False)
-        self.bubbles=AirBubbles(self.decor,self.settings.bubbles,self.camera,self.render)
+        self.bubbles=AirBubbles(self.decor,self.settings.bubbles,self.camera,self.render,self)
         if hasattr(self,"water_lens"):self.bubbles.set_view(self.water_lens)
         self.render.clearLight()
         if self.settings.lighting:
@@ -407,6 +412,10 @@ class Aquarium(ShowBase):
                   f"returns pending={status[3]} unresolved={status[4]}",flush=True)
 
     def update_fish(self,dt):
+        from .bubble_physics import object_origins
+        interests=[('object',(x,y,z+1.)) for _,x,y,z in object_origins(self)]
+        interests += [('bubble',(x,y,z+1.)) for _,x,y,z in getattr(getattr(self,'columns',None),'anchors',())]
+        self.sim.set_activity(self.settings.appearance.fish_activity,interests)
         poses=self.sim.step(dt)
         for key,pose in poses.items():
             model,tail,fins=self.models[key]
@@ -437,6 +446,7 @@ class Aquarium(ShowBase):
                         # fish performing departures over the live collection.
                         self.transitions.destroy();self.transitions=FishTransitions(self)
                     self.roster=new;self.sync_models()
+                    self.nursery.roster_mode(event.get("mode","demo"))
                     self.mode=event.get("mode",self.mode)
                     if hasattr(self,"controls"):self.controls.mode=self.mode
                 elif kind=="connection":
@@ -451,6 +461,7 @@ class Aquarium(ShowBase):
                     self.chat.accept(event)
             else:
                 if event.kind=="return_status":self.status=f"RX return {event.status} · snapshot kept"
+        self.nursery.update(dt)
         self.update_fish(dt);t=self.sim.time
         self.appearance.update(dt)
         self.columns.update(dt)
@@ -485,6 +496,7 @@ class Aquarium(ShowBase):
         return task.cont
 
     def destroy(self):
+        if hasattr(self,"nursery"):self.nursery.close()
         if hasattr(self,"service"):self.service.close()
         if hasattr(self,"controls"):self.controls.clipboard.close()
         if hasattr(self,"window_drag"):self.window_drag.close()

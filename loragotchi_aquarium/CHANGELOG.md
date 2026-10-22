@@ -1,3 +1,11 @@
+## 0.3.0-preview.10
+
+- Dynamic, object-linked bubbles and optional static collision deflection.
+- Independent fish activities and animated background water controls.
+- Opt-in native breeding cave, persistent local eggs and frozen parent portraits. DX transfer remains gated.
+- Separate manual mesh-message games page: noughts and crosses, guessing and open-deck blackjack. No automated sends.
+- Existing read-only viewer, radio backend and firmware are unchanged.
+
 ## 0.3.0-preview.9
 
 - Tidal Garden is now the default native reef, with shaded animated seagrass.

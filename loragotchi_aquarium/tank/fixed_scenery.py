@@ -13,6 +13,7 @@ class FixedObject:
     shapes: tuple
     batched: bool
     enabled: bool
+    bubble_origins: tuple = ()
 
 
 class FixedScenery:
@@ -32,6 +33,9 @@ class FixedScenery:
         position=tuple(node.getPos(self.app.scene))
         enabled=self.app.settings.scenery.get(key,enabled)
         self.records[key]=FixedObject(node,position,tuple(shapes),batched,enabled)
+        if node.hasPythonTag('bubble-origins'):
+            self.records[key].bubble_origins=tuple(node.getPythonTag('bubble-origins'))
+            node.clearPythonTag('bubble-origins')
         if batched:node.wrtReparentTo(self.sources)
         self._apply(key)
 

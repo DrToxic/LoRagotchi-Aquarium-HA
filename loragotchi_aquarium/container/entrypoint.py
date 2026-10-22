@@ -60,6 +60,7 @@ http {
   location = / { try_files HOME_PAGE =404; }
   location = /setup.html { try_files /index.html =404; }
   location = /themes.html { try_files /themes.html =404; }
+  location = /games-api { client_max_body_size 4k; proxy_pass http://127.0.0.1:9003; }
   location = /themes-api { client_max_body_size 16k; proxy_pass http://127.0.0.1:9003; }
   location = /view/ { try_files /screen.html =404; }
   location = /control/ { try_files /screen.html =404; }

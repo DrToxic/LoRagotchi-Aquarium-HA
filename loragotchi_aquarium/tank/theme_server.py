@@ -30,6 +30,7 @@ def handler(library):
             self.reply(200,dict(themes=items,warnings=warnings,styles=STYLES,fields=[dict(key=k,choices=CHOICES.get(k),range=RANGES.get(k)) for k in FIELDS]))
 
         def do_POST(self):
+            if self.path=='/games-api':return self.game_request()
             if self.path!='/themes-api':return self.reply(404,dict(error='Not found'))
             # Custom header + JSON rejects cross-origin forms/fetch without CORS.
             # No OPTIONS/CORS allowance is exposed by this server.
@@ -45,6 +46,18 @@ def handler(library):
                 self.reply(200,dict(manifest=saved,revision=library.revision(saved)))
             except (ValueError,TypeError,RecursionError):self.reply(400,dict(error='Invalid theme, reserved/duplicate ID, or stale revision. Reload before overwriting; check field ranges.'))
             except OSError:self.reply(503,dict(error='Theme library unavailable'))
+        def game_request(self):
+            if self.headers.get('X-Aquarium-Games')!='1' or self.headers.get('Content-Type','').split(';')[0]!='application/json':
+                return self.reply(403,dict(error='Use the games page'))
+            try:
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=4096:raise ValueError('Game request too large')
+                self.connection.settimeout(5)
+                from .games import operation
+                raw=json.loads(self.rfile.read(length))
+                self.reply(200,operation(raw))
+            except (ValueError,TypeError,KeyError,AttributeError,RecursionError):
+                self.reply(400,dict(error='Invalid or conflicting turn. Game unchanged; check the copied message and whose turn it is.'))
     return Handler
 
 

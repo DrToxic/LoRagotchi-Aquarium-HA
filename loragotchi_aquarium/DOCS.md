@@ -406,3 +406,7 @@ Use Configuration `theme_id`, `fish_style` and optional `theme_overrides`; Save 
 ### Scenery style (preview 9)
 
 Tidal Garden is now the default native reef. In Configuration, set **Scenery style** (`scene`) to `classic` for the original simpler scenery, then Save and Restart. Plant count and sway keep their existing controls; themes remain independent. No radio/firmware changes are needed.
+
+## Living aquarium controls
+
+Preview 10 exposes new Appearance and Nursery settings through Configuration. Nursery and background motion start off. Open `setup.html` from the app Web UI, then Mesh message games, for the separate game page. The aquarium stream stays read-only. See [the living aquarium guide](LIVING-AQUARIUM.md) for manual direct-chat transport and local-only egg storage.
