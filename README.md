@@ -172,3 +172,7 @@ Robert Rayner / M0YNW. Thanks to Robert and the MeshCore team.
 - [LoRagotchi-RX](https://github.com/DrToxic/LoRagotchi-RX)
 
 MIT licensed; bundled font and firmware notices remain with their sources.
+
+## Tidal Garden graphics
+
+Tidal Garden is now the default scenery, including shaded animated seagrass. Classic remains available as the simpler alternative. Scenery style is separate from colour themes and quality presets. See [Scenery controls](docs/SCENERY.md).

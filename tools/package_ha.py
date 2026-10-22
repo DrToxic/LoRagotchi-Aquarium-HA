@@ -23,6 +23,7 @@ def package(output):
         shutil.copy2(ROOT/'docs/FISH-LIFESPAN.md',folder/'FISH-LIFESPAN.md')
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'docs/THEMES.md')
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'THEMES.md')
+        shutil.copy2(ROOT/'docs/SCENERY.md',folder/'docs/SCENERY.md')
         shutil.copy2(ROOT/'homeassistant/CHANGELOG.md',folder/'CHANGELOG.md')
         with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(folder.rglob('*')):

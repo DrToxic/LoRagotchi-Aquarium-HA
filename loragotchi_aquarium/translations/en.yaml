@@ -1,4 +1,7 @@
 configuration:
+  scene:
+    name: Scenery style
+    description: Tidal Garden is the new default reef with shaded animated seagrass. Choose classic for the original simpler scenery. Independent of themes and quality. Save and restart.
   theme_id:
     name: Theme ID
     description: current preserves existing Appearance settings. Choose classic, tropical, deep-sea, freshwater, moonlit, minimal or a custom library ID. Named theme fields replace corresponding Appearance values; theme_overrides win. Save and restart.

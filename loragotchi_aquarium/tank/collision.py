@@ -66,14 +66,18 @@ class CollisionWorld:
         Entries are (world centre, full size, world HPR). The artwork and these
         proxies share transforms; removing an object removes its collisions too.
         """
+        self.replace_shapes(group,[(BulletBoxShape(Vec3(*(s/2 for s in size))),pos,hpr)
+                                   for pos,size,hpr in boxes])
+
+    def replace_shapes(self, group, shapes):
+        """Replace exactly one placement owner's solids (including convex rocks)."""
         self.revision += 1
         for path in self.groups.pop(group, []):
             self.world.removeRigidBody(path.node())
             self.statics.remove(path)
             path.removeNode()
         self.groups[group] = [
-            self._static(group, BulletBoxShape(Vec3(*(s/2 for s in size))), pos, hpr)
-            for pos, size, hpr in boxes]
+            self._static(group, shape, pos, hpr) for shape,pos,hpr in shapes]
 
     def add(self, key, stage, pos, heading):
         if key in self.bodies:

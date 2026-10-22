@@ -5,7 +5,9 @@ from panda3d.core import (AmbientLight,DirectionalLight,Fog,WindowProperties,
                          TransparencyAttrib,ClockObject,TextureStage,loadPrcFileData)
 from direct.showbase.ShowBase import ShowBase
 from direct.gui.OnscreenText import OnscreenText
-from .art import fish_model,scenery,mesh
+from .art import fish_model,mesh
+from .scenery import scenery
+from .fixed_scenery import FixedScenery
 from .settings import Settings,PRESETS
 from .simulation import Simulation
 from .views import AquariumView, desktop_lenses
@@ -49,7 +51,7 @@ class Aquarium(ShowBase):
         elif self.streaming:loadPrcFileData("stream",f"win-origin {args.width+16} 0\nundecorated true\n")
         configure_text()
         super().__init__();self.disableMouse();self.setBackgroundColor(.012,.075,.115,1)
-        self.sim=Simulation();self.models={};self.roster=[];self.inbox=[];self.status="Starting aquarium…"
+        self.sim=Simulation(reefs=False);self.models={};self.roster=[];self.inbox=[];self.status="Starting aquarium…"
         self.selected=0;self.show_names=self.settings.show_names;self.panel_visible=not self.managed;self.start=time.monotonic();self.screenshot_done=False
         self.scene=self.render.attachNewNode("aquarium");self.scene.setTwoSided(True)
         self.transitions=FishTransitions(self);self._model_snapshots={}
@@ -68,6 +70,7 @@ class Aquarium(ShowBase):
         self.buffer=None;self.screen=None;self.view_cameras=[]
         self.internal_size=(0,0)
         self.shelves=SandShelves(self)
+        self.scenery_objects=FixedScenery(self)
         self.decorations=DecorationLibrary(self)
         self.appearance=AppearanceScene(self)
         self.columns=BubbleColumns(self)
@@ -102,9 +105,11 @@ class Aquarium(ShowBase):
         return self.views[0].window if self.views else None
 
     def rebuild_scene(self):
+        self.scenery_objects.clear()
         if hasattr(self,"decor"):self.decor.removeNode()
         self.decor=self.scene.attachNewNode("scenery")
-        self.plants,self.caustic=scenery(self.decor,self.settings)
+        self.plants,self.caustic=scenery(self.decor,self.settings,self.scenery_objects)
+        self.scenery_objects.finish(self.decor)
         # Background gradient plane in world space.
         verts=[((-35,13,-1),(0,-1,0),(.015,.065,.10,1),(0,0)),((35,13,-1),(0,-1,0),(.015,.065,.10,1),(1,0)),
                ((35,13,23),(0,-1,0),(.06,.28,.33,1),(1,1)),((-35,13,23),(0,-1,0),(.06,.28,.33,1),(0,1))]
@@ -126,6 +131,7 @@ class Aquarium(ShowBase):
         ClockObject.getGlobalClock().setMode(ClockObject.MLimited);ClockObject.getGlobalClock().setFrameRate(self.settings.fps)
         self.setup_output()
         self.appearance.bind()
+        if hasattr(self,"controls"):self.controls.decorations.rebuild()
 
     def setup_output(self):
         if self._configuring_output or self.win is None or not self.win.getProperties().getOpen():return

@@ -1,3 +1,11 @@
+## 0.3.0-preview.9
+
+- Tidal Garden is now the default native reef, with shaded animated seagrass.
+- Classic remains selectable through the new Scenery style option.
+- Mesh-derived reef collision shapes replace the old fixed rock proxies.
+- Optional standalone operator gains persistent Reef and Plants checkboxes.
+- Managed aquarium stays display-only; receiver, stored fish and firmware are unchanged.
+
 # Changelog
 
 ## 0.3.0-preview.8

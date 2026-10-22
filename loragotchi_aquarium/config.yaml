@@ -1,5 +1,5 @@
 name: LoRagotchi Aquarium Preview
-version: "0.3.0-preview.8"
+version: "0.3.0-preview.9"
 slug: loragotchi_aquarium
 description: Native LoRagotchi aquarium configured and viewed through Home Assistant
 url: https://github.com/DrToxic/LoRagotchi-Aquarium-HA
@@ -25,6 +25,7 @@ options:
   height: 540
   fps: 20
   graphics_preset: balanced
+  scene: tidal-garden
   vsync: false
   chat_bubbles: true
   show_names: false
@@ -93,6 +94,7 @@ schema:
   height: int(180,1080)
   fps: int(10,60)
   graphics_preset: list(compatibility|low|balanced|high|ultra)
+  scene: list(tidal-garden|classic)?
   render_scale: float(0.25,2)?
   detail: int(8,48)?
   plants: int(0,100)?

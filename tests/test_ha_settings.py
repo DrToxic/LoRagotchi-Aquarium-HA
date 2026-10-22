@@ -86,3 +86,10 @@ def test_generated_profile_keeps_legacy_radio_identity_across_startup(tmp_path,m
         try:assert selected.get(timeout=3).client_id==identity.client_id
         finally:worker.close()
     assert ConnectionProfile.load(tmp_path/'rx-connection.json').client_id==identity.client_id
+
+
+def test_default_reef_and_classic_are_independent_of_theme_and_presets():
+    assert render_settings({}).scene=='tidal-garden'
+    assert render_settings({'theme_id':'classic','graphics_preset':'low'}).scene=='tidal-garden'
+    assert render_settings({'scene':'classic','theme_id':'tropical'}).scene=='classic'
+    with pytest.raises(ValueError):render_settings({'scene':'invalid'})

@@ -6,7 +6,7 @@ overrides inherit from the selected preset when omitted (or cleared in HA).
 import json
 import math
 from pathlib import Path
-from .settings import Settings, PRESETS
+from .settings import Settings, PRESETS, validate_setting
 from .appearance import Appearance
 from .expiry import validate_hours
 
@@ -19,6 +19,7 @@ def boolean(value, name):
 
 def render_settings(options, theme_directory=None):
     settings = Settings()
+    settings.scene = validate_setting('scene', options.get('scene', 'tidal-garden'))
     settings.fish_lifespan_hours = validate_hours(options.get('fish_lifespan_hours', 0))
     preset = options.get('graphics_preset', 'balanced')
     if preset not in PRESETS:

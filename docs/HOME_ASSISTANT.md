@@ -402,3 +402,7 @@ See [Fish lifespan](FISH-LIFESPAN.md) for full semantics and a short demo test.
 ## Themes and fish styles (preview 8)
 
 Use Configuration `theme_id`, `fish_style` and optional `theme_overrides`; Save + Restart. The default `current` retains existing Appearance settings. Open Web UI `setup.html` → Theme library for persistent custom theme editing/import/export. The aquarium root remains display-only. See [Themes](THEMES.md).
+
+### Scenery style (preview 9)
+
+Tidal Garden is now the default native reef. In Configuration, set **Scenery style** (`scene`) to `classic` for the original simpler scenery, then Save and Restart. Plant count and sway keep their existing controls; themes remain independent. No radio/firmware changes are needed.
