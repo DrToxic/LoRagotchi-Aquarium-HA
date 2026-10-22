@@ -1,4 +1,4 @@
-"""Loopback-only theme content API behind the existing authenticated ingress.
+"""Loopback-only theme and stateless game API behind the existing authenticated ingress.
 
 No settings selection, filesystem browsing, renderer input or HA credentials.
 """
