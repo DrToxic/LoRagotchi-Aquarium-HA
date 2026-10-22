@@ -1,5 +1,11 @@
 # LoRagotchi-Aquarium-HA
 
+## Tidal Garden default scenery
+
+Tidal Garden is now the default native reef with shaded animated seagrass.
+Choose `classic` under Configuration → Scenery style to use the original scene,
+then Save + Restart. [Scenery controls](docs/SCENERY.md).
+
 ## Themes and fish styles
 
 Six built-in themes, persistent editable custom themes, JSON import/export, and
@@ -9,7 +15,7 @@ HA configuration authority and the portable data-only format.
 
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
-**Preview 7 · amd64 only · demo mode by default.** The original Python/Panda3D
+**Preview 9 · amd64 only · demo mode by default.** The original Python/Panda3D
 Aquarium runs in a container and streams to your browser. There is no separate
 browser renderer. All add-on settings live in Home Assistant’s Configuration
 tab; the native display has no operator window or deadzones.
