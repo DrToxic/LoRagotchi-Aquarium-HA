@@ -409,4 +409,8 @@ Tidal Garden is now the default native reef. In Configuration, set **Scenery sty
 
 ## Living aquarium controls
 
-Preview 10 exposes new Appearance and Nursery settings through Configuration. Nursery and background motion start off. Open `setup.html` from the app Web UI, then Mesh message games, for the separate game page. The aquarium stream stays read-only. See [the living aquarium guide](LIVING-AQUARIUM.md) for manual direct-chat transport and local-only egg storage.
+Preview 10 exposes new Appearance and Nursery settings through Configuration. Nursery and background motion start off. Open `setup.html` from the app Web UI, then Mesh message games, for the separate game page. The aquarium stream stays read-only. See [the living aquarium guide](https://github.com/DrToxic/LoRagotchi-Aquarium-HA/blob/main/docs/LIVING-AQUARIUM.md) for manual direct-chat transport and local-only egg storage.
+
+## How to play the mesh games
+
+See the [step-by-step player guide](https://github.com/DrToxic/LoRagotchi-Aquarium-HA/blob/main/docs/LIVING-AQUARIUM.md#games-using-mesh-messages) for opening the game page, inviting a second player, exchanging turns, all three games’ rules, and saved-game/message recovery. Games use manual direct-chat copy/paste; the aquarium does not send or import turns automatically.
