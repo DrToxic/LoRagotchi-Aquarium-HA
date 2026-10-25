@@ -24,7 +24,7 @@ def package(output):
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'docs/THEMES.md')
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'THEMES.md')
         shutil.copy2(ROOT/'docs/SCENERY.md',folder/'docs/SCENERY.md')
-        for name in ('LIVING-AQUARIUM.md','DX-EGG-CONTRACT.md'):
+        for name in ('LIVING-AQUARIUM.md',):
             shutil.copy2(ROOT/'docs'/name,folder/'docs'/name)
         shutil.copy2(ROOT/'homeassistant/CHANGELOG.md',folder/'CHANGELOG.md')
         with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:

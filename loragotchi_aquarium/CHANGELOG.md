@@ -1,3 +1,9 @@
+## 0.3.0-preview.11
+
+- Age-based genetic colours: ivory-tinted fry and softly coloured young, with readable neutral eyes.
+- Preserve monochrome genetics and unchanged adult appearance; no persistence or radio protocol changes.
+- Retire obsolete appearance/adoption handoffs and clarify approved, unimplemented adoption plans.
+
 ## 0.3.0-preview.10
 
 - Dynamic, object-linked bubbles and optional static collision deflection.
