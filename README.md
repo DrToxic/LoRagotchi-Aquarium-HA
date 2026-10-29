@@ -1,48 +1,13 @@
 # LoRagotchi-Aquarium-HA
 
-**Playing the mesh games?** [Two-player setup, rules and troubleshooting](docs/LIVING-AQUARIUM.md#games-using-mesh-messages).
-
-## Native controls
-
-The optional desktop operator now opens at 1100×800 with a persistent sidebar,
-readable pixel-sized controls and scrollable smaller-window layouts. See
-[Controls and save scopes](docs/CONTROLS.md) for appearance drafts, previews,
-separate save actions and the feature map. Home Assistant managed mode remains
-display-only and continues to use HA Configuration, not this operator.
-
-## Tidal Garden default scenery
-
-Tidal Garden is now the default native reef with shaded animated seagrass.
-Choose `classic` under Configuration → Scenery style to use the original scene,
-then Save + Restart. [Scenery controls](docs/SCENERY.md).
-
-## Themes and fish styles
-
-Six built-in themes, persistent editable custom themes, JSON import/export, and
-Classic/Rounded/Faceted fish styles. See [Themes](docs/THEMES.md) for controls,
-HA configuration authority and the portable data-only format.
-
+[Changes and version history](CHANGES.MD) · **Playing the mesh games?** [Two-player setup, rules and troubleshooting](docs/LIVING-AQUARIUM.md#games-using-mesh-messages).
 
 The Home-Assistant version of the Community Aquarium software for the LoRagotchi-DX firmware.
 
-**Preview 9 · amd64 only · demo mode by default.** The original Python/Panda3D
+**Preview 12 · amd64 only · demo mode by default.** The original Python/Panda3D
 Aquarium runs in a container and streams to your browser. There is no separate
 browser renderer. All add-on settings live in Home Assistant’s Configuration
 tab; the native display has no operator window or deadzones.
-
-## Preview 7 configurable fish lifespan
-
-Configuration → **Fish lifespan (hours)**: `0` is off (default), `24` is a day,
-`168` is a week. Save + Restart. New shares renew copies; duplicate packets and
-restarts do not. Expiry animates departures while preserving history and pending
-radio returns. [Behavior and testing](docs/FISH-LIFESPAN.md).
-
-## Preview 6 appearance controls
-
-Lighting, automatic day/night (clock or HA sun), water backgrounds/fog, sand tint,
-effect motion and stable pooled bubble columns are now configurable in HA.
-Manual changes use Save + Restart; automatic cycles then run continuously.
-See [Appearance](docs/APPEARANCE.md) and [HA setup](docs/HOME_ASSISTANT.md).
 
 ## Install on Home Assistant OS
 
@@ -188,11 +153,3 @@ Robert Rayner / M0YNW. Thanks to Robert and the MeshCore team.
 - [LoRagotchi-RX](https://github.com/DrToxic/LoRagotchi-RX)
 
 MIT licensed; bundled font and firmware notices remain with their sources.
-
-## Tidal Garden graphics
-
-Tidal Garden is now the default scenery, including shaded animated seagrass. Classic remains available as the simpler alternative. Scenery style is separate from colour themes and quality presets. See [Scenery controls](docs/SCENERY.md).
-
-## Living aquarium candidate
-
-0.3.0-preview.10 adds dynamic/object bubbles, fish activities, animated water, an opt-in local nursery and manual mesh-message games. See [controls and boundaries](docs/LIVING-AQUARIUM.md). DX egg transfer is not connected.

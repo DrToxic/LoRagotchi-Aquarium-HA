@@ -11,7 +11,7 @@ def package(output):
     output=Path(output).resolve();output.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='aquarium-ha-package-') as temporary:
         folder=Path(temporary)/'loragotchi_aquarium';folder.mkdir()
-        for name in ('Dockerfile','pyproject.toml','README.md','LICENSE','.dockerignore'):
+        for name in ('Dockerfile','pyproject.toml','README.md','CHANGES.MD','LICENSE','.dockerignore'):
             shutil.copy2(ROOT/name,folder/name)
         for name in ('tank','container'):
             shutil.copytree(ROOT/name,folder/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
@@ -24,9 +24,11 @@ def package(output):
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'docs/THEMES.md')
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'THEMES.md')
         shutil.copy2(ROOT/'docs/SCENERY.md',folder/'docs/SCENERY.md')
-        for name in ('LIVING-AQUARIUM.md','CONTROLS.md'):
+        for name in ('LIVING-AQUARIUM.md','CONTROLS.md','HOME_ASSISTANT.md','APPEARANCE.md'):
             shutil.copy2(ROOT/'docs'/name,folder/'docs'/name)
         shutil.copy2(ROOT/'homeassistant/CHANGELOG.md',folder/'CHANGELOG.md')
+        (folder/'homeassistant').mkdir()
+        shutil.copy2(ROOT/'homeassistant/CHANGELOG.md',folder/'homeassistant/CHANGELOG.md')
         with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(folder.rglob('*')):
                 if path.is_file():archive.write(path,path.relative_to(temporary))
