@@ -56,3 +56,12 @@ def test_display_restart_preserves_backend_and_does_not_inherit_token(tmp_path,m
     assert not any('127.0.0.1:9002' in p.command or '5902' in p.command for p in starts)
     assert '960x540x24' in next(p.command for p in starts if p.command[0]=='Xvfb')
     assert all(p.terminated or p.returncode is not None for p in starts)
+
+
+def test_presentation_dimensions_preserve_managed_and_fit_native_operator():
+    spec=importlib.util.spec_from_file_location('aquarium_entrypoint_dimensions',Path(__file__).parents[1]/'container/entrypoint.py')
+    entry=importlib.util.module_from_spec(spec);spec.loader.exec_module(entry)
+    assert entry.display_geometry(960,540,True)=='960x540x24'
+    assert entry.display_geometry(1920,1080,True)=='1920x1080x24'
+    assert entry.display_geometry(960,540,False)=='2076x800x24'
+    assert entry.display_geometry(1920,1080,False)=='3036x1080x24'

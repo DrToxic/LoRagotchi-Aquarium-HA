@@ -46,7 +46,7 @@ class Aquarium(ShowBase):
         if args.no_lighting:self.settings.lighting=False
         if args.no_caustics:self.settings.caustics=False
         if args.no_vsync:self.settings.vsync=False
-        loadPrcFileData("tank",f"window-title LoRagotchi Aquarium — Controls\nwin-size 456 748\nwin-origin 32 32\nundecorated false\nfullscreen false\nsync-video {str(self.settings.vsync).lower()}\naudio-library-name null\nframebuffer-multisample 0\ntextures-power-2 none\nnotify-level warning\n")
+        loadPrcFileData("tank",f"window-title LoRagotchi Aquarium — Controls\nwin-size 1100 800\nwin-origin 32 32\nundecorated false\nfullscreen false\nsync-video {str(self.settings.vsync).lower()}\naudio-library-name null\nframebuffer-multisample 0\ntextures-power-2 none\nnotify-level warning\n")
         if self.managed:loadPrcFileData("managed",f"window-title LoRagotchi Aquarium\nwin-size {args.width} {args.height}\nwin-origin 0 0\nundecorated true\n")
         elif self.streaming:loadPrcFileData("stream",f"win-origin {args.width+16} 0\nundecorated true\n")
         configure_text()

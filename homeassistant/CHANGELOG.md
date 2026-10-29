@@ -1,3 +1,10 @@
+## 0.3.0-preview.12
+
+- Redesign the optional native/source operator with a stable sidebar, grouped
+  appearance drafts, explicit save scopes, applied-scene preview and discard
+  confirmation. Keep the managed HA aquarium display-only with HA Configuration.
+- Preserve radio, receiver/persistence, games and juvenile genetic visuals.
+
 ## 0.3.0-preview.11
 
 - Age-based genetic colours: ivory-tinted fry and softly coloured young, with readable neutral eyes.

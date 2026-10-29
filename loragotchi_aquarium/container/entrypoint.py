@@ -9,6 +9,11 @@ import sys
 import time
 
 
+def display_geometry(width,height,managed):
+    """Managed stays scene-only; optional operator gets its whole native window."""
+    return f'{width}x{height}x24' if managed else f'{width+1116}x{max(height,800)}x24'
+
+
 def configuration():
     options = Path('/data/options.json')
     ha = os.environ.get('AQUARIUM_INGRESS') == '1'
@@ -142,7 +147,7 @@ def main():
     def start(command):
         proc=subprocess.Popen(command,env=display_env);children.append(proc);return proc
     def presentation():
-        display_size=f'{w}x{h}x24' if cfg['ha'] else f'{w+472}x{max(h,768)}x24'
+        display_size=display_geometry(w,h,cfg['ha'])
         start(['Xvfb',':99','-screen','0',display_size,'-nolisten','tcp','-ac'])
         for _ in range(100):
             if subprocess.run(['xdpyinfo','-display',':99'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=display_env).returncode==0: break
