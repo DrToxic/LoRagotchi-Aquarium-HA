@@ -18,6 +18,8 @@ def test_rich_strict():
     for data in (rich(s, flags=8),rich(s,genes=(7,8,9)),rich(s,panel=3),rich(s,flags=0),rich(s)[:-1]):
         with pytest.raises(ProtocolError): decode_event(s.rx,data)
     assert len(encode_event(s))==77
+    assert encode_event(e)==rich(s)
+    with pytest.raises(ProtocolError): encode_event(replace(e, body_gene=7))
 
 
 def test_identity_and_replay(tmp_path):
@@ -31,3 +33,10 @@ def test_identity_and_replay(tmp_path):
     assert st.roster()[0].species_present is False
     assert st.roster()[0].body==s.body
     st.close()
+
+
+def test_species_registry_is_permanent_and_unknown_safe():
+    from tank.species import LABELS, render_id, label
+    assert len(LABELS)==14 and LABELS[12]=='Shell-dweller'
+    assert [render_id(i) for i in range(14)]==list(range(14))
+    assert render_id(65535)==0 and label(65535)=='Unknown (fish)'
