@@ -62,6 +62,14 @@ class Snapshot:
     appearance: bool
     name: str
     kind: str = "snapshot"
+    species_id: int = 0
+    body_gene: int | None = None
+    scales_gene: int | None = None
+    eyes_gene: int | None = None
+    panel: int | None = None
+    species_present: bool = False
+    genes_present: bool = False
+    panel_present: bool = False
 
 
 @dataclass(frozen=True)
@@ -79,8 +87,9 @@ def decode_event(rx, data):
         raise ProtocolError("RX identity must be a full 32-byte public key")
     if not data:
         raise ProtocolError("Empty event")
-    if data[0] == 1:
-        if len(data) != 77:
+    if data[0] in (1, 3):
+        expected = 77 if data[0] == 1 else 84
+        if len(data) != expected:
             raise ProtocolError(f"Invalid snapshot length {len(data)}")
         event_id = struct.unpack_from("<I", data, 1)[0]
         owner = data[5:37].hex()
@@ -90,7 +99,23 @@ def decode_event(rx, data):
             raise ProtocolError("Invalid fish appearance")
         name = data[53:77].split(b"\0", 1)[0].decode("utf-8", errors="replace")
         name = "".join(c for c in name if c.isprintable())[:24]
-        return Snapshot(rx, event_id, owner, fid, tx, stage, chr(mode), body, scales, eyes, tint, bool(appearance), name)
+        extra = {}
+        if data[0] == 3:
+            flags = data[77]
+            species = int.from_bytes(data[78:80], "little")
+            genes = tuple(data[80:83])
+            panel = data[83]
+            if flags & ~7 or (not flags & 1 and species) or (not flags & 2 and any(genes)) or (not flags & 4 and panel):
+                raise ProtocolError("Invalid Water metadata presence")
+            if flags & 2 and any(not (g <= 6 or 8 <= g <= 247) for g in genes):
+                raise ProtocolError("Invalid Water genes")
+            if flags & 4 and panel > 2:
+                raise ProtocolError("Invalid Water panel")
+            extra = dict(species_id=species, species_present=bool(flags & 1), genes_present=bool(flags & 2),
+                         panel_present=bool(flags & 4), body_gene=genes[0] if flags & 2 else None,
+                         scales_gene=genes[1] if flags & 2 else None, eyes_gene=genes[2] if flags & 2 else None,
+                         panel=panel if flags & 4 else None)
+        return Snapshot(rx, event_id, owner, fid, tx, stage, chr(mode), body, scales, eyes, tint, bool(appearance), name, **extra)
     if data[0] == 2 and len(data) == 11:
         event_id, snapshot_id, status, attempts = struct.unpack_from("<IIBB", data, 1)
         if status not in (1, 2) or attempts > 4:
