@@ -4,13 +4,13 @@ All SQLite access happens on NurseryWorker. No transport exists in this module;
 claiming an egg is deliberately unsupported until a versioned DX handshake exists.
 """
 from dataclasses import asdict, dataclass
-import hashlib
 import json
 import math
 from pathlib import Path
 import queue
 import random
 import sqlite3
+import struct
 import threading
 import time
 import uuid
@@ -41,14 +41,31 @@ def parent_key(parent):
     return f"{parent['owner']}:{parent['fish_id']}"
 
 
+def eligible_parent(value):
+    """Only received adult/elder stages; snapshots carry no age or generation."""
+    stage=value.get('stage') if isinstance(value,dict) else getattr(value,'stage',None)
+    return type(stage) is int and stage in (2,3)
+
+
+def synthetic_parent(value):
+    from .demo import RX, SYNTHETIC_OWNERS
+    p=value if isinstance(value,dict) else asdict(value)
+    return str(p.get('rx','')).lower()==RX or str(p.get('owner','')).lower() in SYNTHETIC_OWNERS
+
+
 def validate_parent(value):
     from .protocol import Snapshot
     p=asdict(value) if isinstance(value,Snapshot) else dict(value)
+    if not eligible_parent(p):raise ValueError('Choose two adult or elder fish')
     # Reuse the wire codec's bounds without sending anything.
     from .protocol import encode_event, decode_event
-    decode_event(p['rx'],encode_event(Snapshot(**p)))
-    if len(p['owner'])!=64 or len(bytes.fromhex(p['owner']))!=32 or p['stage']<2:
-        raise ValueError('Choose two adult or elder fish')
+    try:decode_event(p['rx'],encode_event(Snapshot(**p)))
+    except (TypeError,struct.error,OverflowError) as exc:
+        raise ValueError('Invalid parent snapshot') from exc
+    if len(p['owner'])!=64 or len(bytes.fromhex(p['owner']))!=32:
+        raise ValueError('Invalid full parent identity')
+    p['owner']=bytes.fromhex(p['owner']).hex()
+    p['rx']=bytes.fromhex(p['rx']).hex()
     return p
 
 
@@ -68,20 +85,30 @@ def preview_colour(a,b,seed):
 
 
 class NurseryStore:
-    def __init__(self,path,scope):
+    def __init__(self,path,scope,mode='live'):
+        if mode not in ('live','demo','replay'):raise ValueError('Invalid nursery mode')
         if str(path)!=':memory:':Path(path).parent.mkdir(parents=True,exist_ok=True)
         self.db=sqlite3.connect(str(path),timeout=5)
         self.db.execute('PRAGMA synchronous=FULL')
         self.db.execute('CREATE TABLE IF NOT EXISTS eggs (scope TEXT NOT NULL, id TEXT PRIMARY KEY, created REAL NOT NULL, parents TEXT NOT NULL, preview TEXT NOT NULL)')
         self.db.execute('CREATE TABLE IF NOT EXISTS nursery_cooldowns (scope TEXT NOT NULL, parent TEXT NOT NULL, until REAL NOT NULL, PRIMARY KEY(scope,parent))')
-        self.db.commit();self.scope=scope
+        # Separate additive ledger: even legacy five-column egg inserts remain
+        # compatible. Never change old IDs, parents, previews or cooldowns.
+        self.db.execute('CREATE TABLE IF NOT EXISTS nursery_lineage (egg TEXT PRIMARY KEY, metadata TEXT NOT NULL)')
+        self.db.commit();self.scope=scope;self.mode=mode
 
     def eggs(self):
-        return [dict(id=i,created=t,parents=json.loads(p),preview=json.loads(v),state='stored-local')
-                for i,t,p,v in self.db.execute('SELECT id,created,parents,preview FROM eggs WHERE scope=? ORDER BY created,id',(self.scope,))]
+        return [dict(id=i,created=t,parents=json.loads(p),preview=json.loads(v),state='stored-local',
+                     lineage=json.loads(lineage) if lineage else None)
+                for i,t,p,v,lineage in self.db.execute('SELECT e.id,e.created,e.parents,e.preview,l.metadata FROM eggs e LEFT JOIN nursery_lineage l ON l.egg=e.id WHERE e.scope=? ORDER BY e.created,e.id',(self.scope,))]
 
     def create(self,a,b,settings,now=None,egg_id=None):
         a,b=validate_parent(a),validate_parent(b)
+        synthetic=[synthetic_parent(p) for p in (a,b)]
+        if self.mode=='live' and any(synthetic):
+            raise ValueError('Demo parents cannot breed in the live nursery')
+        if self.mode=='demo' and not all(synthetic):
+            raise ValueError('Only demo parents can breed in the demo nursery')
         if a['owner']==b['owner']:raise ValueError('Parents must have different full owner identities')
         if not settings.enabled:raise ValueError('Enable the nursery first')
         now=time.time() if now is None else now
@@ -105,7 +132,13 @@ class NurseryStore:
                 row=self.db.execute('SELECT until FROM nursery_cooldowns WHERE scope=? AND parent=?',(self.scope,key)).fetchone()
                 if row and row[0]>now:raise ValueError('A parent is resting after breeding')
             preview=preview_colour(*parents,ident)
-            self.db.execute('INSERT INTO eggs VALUES(?,?,?,?,?)',(self.scope,ident,now,json.dumps(parents,sort_keys=True),json.dumps(preview)))
+            # Local ancestry only, never a DX/player generation or firmware genome.
+            lineage=(dict(rule='demo-founders-v1',parent_generations=[1,1],generation=2)
+                     if self.mode=='demo' else None)
+            self.db.execute('INSERT INTO eggs VALUES(?,?,?,?,?)',
+                            (self.scope,ident,now,json.dumps(parents,sort_keys=True),json.dumps(preview)))
+            if lineage:
+                self.db.execute('INSERT INTO nursery_lineage VALUES(?,?)',(ident,json.dumps(lineage)))
             for key in keys:
                 self.db.execute('INSERT OR REPLACE INTO nursery_cooldowns VALUES(?,?,?)',(self.scope,key,now+settings.cooldown_minutes*60))
             self.db.commit();return ident
@@ -128,7 +161,7 @@ class NurseryWorker:
         except queue.Full:return False
 
     def run(self):
-        store=None
+        store=None;context=None
         try:
             while not self.stop.is_set():
                 try:action,data=self.commands.get(timeout=.2)
@@ -136,19 +169,23 @@ class NurseryWorker:
                 try:
                     if action=='open':
                         if store:store.close()
+                        store=None;context=data.get('context')
                         mode=data['mode']
+                        if mode not in ('live','demo','replay'):raise ValueError('Invalid nursery mode')
                         # Synthetic modes never load or write the live nursery.
                         base=Path(self.args.settings).parent
                         path=base/('nursery-live.sqlite3' if mode=='live' else 'nursery-'+mode+'.sqlite3')
                         if mode!='live' and str(self.args.database)==':memory:':path=':memory:'
                         scope=str(getattr(self.args,'session','community'))
-                        store=NurseryStore(path,scope)
-                    elif action=='create' and store:
+                        store=NurseryStore(path,scope,mode)
+                    elif action=='create':
+                        if store is None:raise ValueError('Nursery storage is not open')
+                        if data.get('context')!=context:raise ValueError('Nursery source changed; choose parents again')
                         store.create(data['a'],data['b'],NurserySettings.from_dict(data['settings']),egg_id=data['id'])
                     else:continue
-                    self.events.put(dict(kind='nursery',eggs=store.eggs(),text='Local nursery · DX transfer not connected'))
+                    self.events.put(dict(kind='nursery',context=context,eggs=store.eggs(),text='Local nursery · DX transfer not connected'))
                 except (ValueError,OSError,sqlite3.Error,TypeError,KeyError) as exc:
-                    self.events.put(dict(kind='nursery',text=str(exc),error=True))
+                    self.events.put(dict(kind='nursery',context=data.get('context'),text=str(exc),error=True))
         finally:
             if store:store.close()
 

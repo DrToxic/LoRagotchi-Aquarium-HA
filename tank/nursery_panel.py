@@ -1,6 +1,6 @@
 """Native nursery controls; HA uses its Configuration, never viewer input."""
 from copy import deepcopy
-from .nursery import NurserySettings
+from .nursery import NurserySettings, eligible_parent, synthetic_parent
 from .text import display_text
 
 
@@ -23,20 +23,23 @@ class NurseryPanel:
         self.second=controls.menu(parent,['No adults'],18,483,396,lambda _:None)
         self.create=controls.button(parent,'Invite pair to cave',18,530,396,self.breed)
         self.note=controls.label(parent,'',18,572,12,396)
-        controls.label(parent,'Eggs stay here across restarts. Parent portraits are\nfrozen at breeding. DX transfer is not connected.',18,624,11,396)
+        self.info=controls.label(parent,'',18,624,11,396)
         self.parents=[];self.signature=None
 
     def refresh(self):
-        adults=[f for f in self.app.roster if f.stage>=2]
-        signature=tuple((f.owner,f.fish_id,f.name) for f in adults)
+        adults=[f for f in self.app.roster if eligible_parent(f)]
+        signature=(self.app.nursery.mode,tuple(adults))
         if signature!=self.signature:
             self.signature=signature;self.parents=adults
-            items=[f'{i+1}. {display_text(f.name)} · {f.owner[:8]}' for i,f in enumerate(adults)] or ['No adults']
+            items=[f'{i+1}. {display_text(f.name)} · {f.owner[:8]}'+(' · Demo Gen 1' if self.app.nursery.mode=='demo' and synthetic_parent(f) else '') for i,f in enumerate(adults)] or ['No adults']
             for j,menu in enumerate((self.first,self.second)):
                 menu['items']=items;menu.set(min(j,len(items)-1),fCommand=0)
-        self.controls.enabled(self.create,len(adults)>=2 and self.app.settings.nursery.enabled and not self.app.nursery.pending_request)
+        self.controls.enabled(self.create,len(adults)>=2 and self.app.settings.nursery.enabled and not self.app.nursery.pending_request and not self.app.nursery.pending)
         self.note['text']=f'{len(self.app.nursery.eggs)} stored eggs · '+self.app.nursery.status
         self.note.resetFrameSize()
+        self.info['text']=('Demo adults / elders are Gen 1 founders. Their eggs\nare local Gen 2; no live mixing or DX transfer.' if self.app.nursery.mode=='demo' else
+                           'Eggs stay here across restarts. Parent portraits are\nfrozen at breeding. DX transfer is not connected.')
+        self.info.resetFrameSize()
 
     def save(self):
         try:
@@ -48,5 +51,12 @@ class NurseryPanel:
 
     def breed(self):
         try:
-            self.app.nursery.request_pair(self.parents[self.first['selectedIndex']],self.parents[self.second['selectedIndex']])
-        except (ValueError,IndexError) as exc:self.app.nursery.status=str(exc)
+            # selectedIndex is a DirectOptionMenu attribute, NOT a GUI option.
+            choices=[]
+            for menu in (self.first,self.second):
+                index=menu.selectedIndex
+                if type(index) is not int or not 0<=index<len(self.parents):
+                    raise ValueError('Choose two adult or elder fish')
+                choices.append(self.parents[index])
+            self.app.nursery.request_pair(*choices)
+        except (ValueError,IndexError,KeyError,TypeError,AttributeError) as exc:self.app.nursery.status=str(exc)
