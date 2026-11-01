@@ -1,3 +1,9 @@
+## 0.3.0-preview.15
+
+- Negotiate Water LFG1 metadata with S1-capable DX senders and persist species,
+  genes, and panel metadata for received animals.
+- Preserve the legacy nine-field COMMIT path and upgrade pending ACKs safely.
+
 ## 0.3.0-preview.14
 
 - Add distinct locomotion for shrimp, jet-propelled squid and octopus, pulsing
