@@ -103,7 +103,11 @@ def test_auth_and_service_errors_do_not_expose_credentials():
     asyncio.run(scenario())
 
 
-def test_wire_flow_early_outcomes_chat_coexistence_and_readonly(tmp_path,monkeypatch):
+@pytest.mark.parametrize('commit,species', [
+    (COMMIT, None),
+    (COMMIT + '|H1|220|120|6|P1|2|S1|13', 13),
+])
+def test_wire_flow_early_outcomes_chat_coexistence_and_readonly(tmp_path,monkeypatch,commit,species):
     monkeypatch.setattr(Backend,'PACE',.05);monkeypatch.setattr(Receiver,'HOLD',.1)
     async def scenario():
         ha=FakeHA();chat=[]
@@ -127,12 +131,18 @@ def test_wire_flow_early_outcomes_chat_coexistence_and_readonly(tmp_path,monkeyp
                 await asyncio.sleep(.1)
                 assert not store.roster()
                 await ha.incoming(REQ)
-                await until(lambda:any(c.get('service_data',{}).get('message')=='LFG1|ACK|12|34' for c in ha.calls))
-                await ha.incoming(COMMIT)
+                await until(lambda:any(c.get('service_data',{}).get('message')=='LFG1|ACK|12|34|S1' for c in ha.calls))
+                await ha.incoming(commit)
                 await until(lambda:backend.receiver.summary()['delivered']==1)
                 assert len(store.roster())==1
+                snapshot=store.roster()[0]
+                assert snapshot.species_present == (species is not None)
+                if species is not None:
+                    assert snapshot.species_id==species
+                    assert snapshot.genes_present and snapshot.body_gene==220
+                    assert snapshot.panel_present and snapshot.panel==2
                 assert any(e['data']['message']=='Ordinary chat stays in Chat' for e in chat)
-                assert any(e['data']['message']==COMMIT for e in chat)
+                assert any(e['data']['message']==commit for e in chat)
                 assert all(c['service_data']['pubkey_prefix']==OWNER for c in ha.calls if c['service']=='send_message')
                 assert len([c for c in ha.calls if c['service']=='send_message'])<=3
             finally:
