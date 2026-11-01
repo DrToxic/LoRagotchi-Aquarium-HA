@@ -1,0 +1,26 @@
+name: Targeted current HA source and generated app checks
+'on':
+  push:
+    branches:
+    - fix/current-ci-20261101
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: current-ha-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.sha }}
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - run: pip install uv==0.12.5
+    - run: uv sync --frozen --extra test
+    - run: uv run --frozen pytest -q
+    - run: uv run --frozen python tools/sync_ha_repository.py --check
