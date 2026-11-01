@@ -1,3 +1,8 @@
+# 0.3.0-preview.13 (local, unpublished)
+
+- Negotiate LRX-only stock-repeater tank connectors without companion control commands.
+- Retain authenticated network transport, Water/legacy durable intake and HA ownership policy.
+
 ## 0.3.0-preview.12
 
 - Redesign the optional native/source operator with a stable sidebar, grouped

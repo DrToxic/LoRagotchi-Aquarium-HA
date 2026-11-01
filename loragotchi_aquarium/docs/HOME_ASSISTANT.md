@@ -414,3 +414,14 @@ Preview 10 exposes new Appearance and Nursery settings through Configuration. Nu
 ## How to play the mesh games
 
 See the [step-by-step player guide](https://github.com/DrToxic/LoRagotchi-Aquarium-HA/blob/main/docs/LIVING-AQUARIUM.md#games-using-mesh-messages) for opening the game page, inviting a second player, exchanging turns, all three games’ rules, and saved-game/message recovery. Games use manual direct-chat copy/paste; the aquarium does not send or import turns automatically.
+
+## Local stock-repeater tank connector support
+
+The common direct LRX adapter recognizes HELLO link flag 0x80 as an intake-only
+endpoint. Fish reception and durable Water/legacy replay remain available, while
+companion chat/configuration/polling is suppressed. USB/BLE and authenticated
+LRXB/HMAC TCP use the existing direct tank transports. Manage the repeater through
+its stock USB CLI or authenticated over-radio admin. It is not a MeshCore companion
+for HACS; the separate HA-service receiver backend and MeshCoMod overlay are not
+changed into repeater clients by this adapter update. No installed HA setup or
+radio is changed by the local source branch. Preview.13 remains unpublished.
