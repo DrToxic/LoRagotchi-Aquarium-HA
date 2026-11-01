@@ -1,7 +1,22 @@
-# 0.3.0-preview.13 (local, unpublished)
+## 0.3.0-preview.15
 
-- Negotiate LRX-only stock-repeater tank connectors without companion control commands.
-- Retain authenticated network transport, Water/legacy durable intake and HA ownership policy.
+- Negotiate Water LFG1 metadata with S1-capable DX senders and persist species,
+  genes, and panel metadata for received animals.
+- Preserve the legacy nine-field COMMIT path and upgrade pending ACKs safely.
+
+## 0.3.0-preview.14
+
+- Add distinct locomotion for shrimp, jet-propelled squid and octopus, pulsing
+  jellyfish, and slow bottom-dwelling lobster, crab, shell-dweller and sea star.
+- Keep crab obstacle avoidance aligned with its sideways scuttle.
+- Make the new release detectable by Home Assistant with an incremented add-on version.
+
+## 0.3.0-preview.13
+
+- Add Water v1 species, gene and panel metadata support with backward-compatible
+  decoding and persistence; render species-specific aquarium models and motion.
+- Preserve species and genetic metadata across repeated or partial updates.
+- Harden nursery parent validation, demo/live isolation and stale worker handling.
 
 ## 0.3.0-preview.12
 

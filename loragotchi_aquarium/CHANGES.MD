@@ -47,6 +47,27 @@ Tidal Garden is now the default scenery, including shaded animated seagrass. Cla
 
 ## Home Assistant release history
 
+## 0.3.0-preview.15
+
+- Negotiate S1 Water metadata for Home Assistant LFG1 visits and preserve
+  received species, optional genes, and panel while retaining legacy COMMITs.
+- Upgrade pending pre-S1 acknowledgements so active reservations use the new
+  metadata capability after an add-on update.
+
+## 0.3.0-preview.14
+
+- Give shrimp, squid, octopus, jellyfish and bottom-dwelling species locomotion
+  suited to their anatomy; crabs scuttle sideways and avoid obstacles along
+  their travel direction.
+- Increment the Supervisor add-on version so Home Assistant can detect updates.
+
+## 0.3.0-preview.13
+
+- Add Water v1 species, gene and panel metadata support with backward-compatible
+  decoding and persistence; render species-specific aquarium models and motion.
+- Preserve species and genetic metadata across repeated or partial updates.
+- Harden nursery parent validation, demo/live isolation and stale worker handling.
+
 ## 0.3.0-preview.12
 
 - Redesign the optional native/source operator with a stable sidebar, grouped
