@@ -182,7 +182,7 @@ wheels = [
 
 [[package]]
 name = "loragotchi-community-tank"
-version = "0.3.0.dev12"
+version = "0.3.0.dev14"
 source = { editable = "." }
 dependencies = [
     { name = "bleak" },

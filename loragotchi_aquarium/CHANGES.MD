@@ -47,6 +47,13 @@ Tidal Garden is now the default scenery, including shaded animated seagrass. Cla
 
 ## Home Assistant release history
 
+## 0.3.0-preview.14
+
+- Give shrimp, squid, octopus, jellyfish and bottom-dwelling species locomotion
+  suited to their anatomy; crabs scuttle sideways and avoid obstacles along
+  their travel direction.
+- Increment the Supervisor add-on version so Home Assistant can detect updates.
+
 ## 0.3.0-preview.13
 
 - Add Water v1 species, gene and panel metadata support with backward-compatible

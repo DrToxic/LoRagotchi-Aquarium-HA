@@ -1,3 +1,10 @@
+## 0.3.0-preview.14
+
+- Add distinct locomotion for shrimp, jet-propelled squid and octopus, pulsing
+  jellyfish, and slow bottom-dwelling lobster, crab, shell-dweller and sea star.
+- Keep crab obstacle avoidance aligned with its sideways scuttle.
+- Make the new release detectable by Home Assistant with an incremented add-on version.
+
 ## 0.3.0-preview.13
 
 - Add Water v1 species, gene and panel metadata support with backward-compatible
