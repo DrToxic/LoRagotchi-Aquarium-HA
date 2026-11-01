@@ -5,7 +5,7 @@ import uuid
 from panda3d.core import NodePath, Vec3, CardMaker, Texture, PNMImage
 from panda3d.bullet import BulletBoxShape
 from .art import ellipsoid, mesh, colour
-from .nursery import NurseryWorker
+from .nursery import NurseryWorker, eligible_parent, validate_parent, synthetic_parent
 
 
 def box(name,size,color):
@@ -47,7 +47,7 @@ def portrait(parent):
 class NurseryScene:
     def __init__(self,app):
         self.app=app;self.worker=NurseryWorker(app.args)
-        self.mode=None;self.eggs=[];self.status='Nursery off'
+        self.mode=None;self.context=0;self.eggs=[];self.status='Nursery off'
         self.root=None;self.egg_root=None;self.key=None;self.pending=None
         self.elapsed=0.;self.next_attempt=20.;self.pending_request=False
 
@@ -86,25 +86,37 @@ class NurseryScene:
                 card.setTexture(portrait(parent));card.setLightOff();card.setTwoSided(True)
 
     def request_pair(self,a,b):
-        if self.pending_request:raise ValueError('Nursery storage is busy')
+        if self.pending_request or self.pending:raise ValueError('Nursery storage or pair is busy')
         settings=self.app.settings.nursery
         if not settings.enabled:raise ValueError('Enable the nursery first')
-        if a.owner==b.owner or min(a.stage,b.stage)<2:raise ValueError('Choose two different adult or elder fish')
+        pa,pb=validate_parent(a),validate_parent(b)
+        if pa['owner']==pb['owner']:raise ValueError('Choose two different adult or elder fish')
+        if a not in self.app.roster or b not in self.app.roster:
+            raise ValueError('Parent changed or departed; choose again')
+        if self.mode=='live' and any(synthetic_parent(f) for f in (a,b)):
+            raise ValueError('Demo parents cannot breed in the live nursery')
+        if self.mode=='demo' and not all(synthetic_parent(f) for f in (a,b)):
+            raise ValueError('Only demo parents can breed in the demo nursery')
         if len(self.eggs)>=settings.capacity:raise ValueError('Nursery is full; existing eggs are retained')
         self.pending=(a,b);self.elapsed=0.;self.ready_time=0.;self.routes={};self.visit_time={};self.visited=set()
         self.status='Pair visiting the breeding cave'
 
     def roster_mode(self,mode):
         if self.mode==mode:return
-        self.mode=mode;self.eggs=[];self.pending=None;self.pending_request=False
-        self.worker.submit('open',mode=mode)
+        self.mode=mode;self.context+=1;self.eggs=[];self.pending=None
+        self.pending_request=True;self.status='Opening isolated nursery'
+        if not self.worker.submit('open',mode=mode,context=self.context):
+            self.status='Nursery storage is busy; switch source again'
+        self.key=None
         self.render_eggs()
 
     def update(self,dt):
         settings=self.app.settings.nursery
         for swimmer in self.app.sim.swimmers.values():swimmer.courtship=None
         while not self.worker.events.empty():
-            event=self.worker.events.get_nowait();self.status=event['text'];self.pending_request=False
+            event=self.worker.events.get_nowait()
+            if event.get('context')!=self.context:continue
+            self.status=event['text'];self.pending_request=False
             if 'eggs' in event:self.eggs=event['eggs'];self.render_eggs()
         owner=getattr(self.app,'placement',None) or getattr(self.app,'scenery_objects',None)
         record=getattr(owner,'records',{}).get('nursery:cave')
@@ -114,11 +126,12 @@ class NurseryScene:
         self.next_attempt-=dt
         if self.pending is None and not self.pending_request and settings.automatic and self.next_attempt<=0:
             self.next_attempt=60.
-            adults=[f for f in self.app.roster if f.stage>=2]
+            adults=[f for f in self.app.roster if eligible_parent(f)]
             if len(adults)>=2 and len(self.eggs)<settings.capacity:
                 # Rotate candidates; the durable store enforces each parent's rest.
                 index=int(self.app.sim.time//60)%len(adults)
-                self.request_pair(adults[index],adults[(index+1)%len(adults)])
+                try:self.request_pair(adults[index],adults[(index+1)%len(adults)])
+                except ValueError as exc:self.status=str(exc)
         if not self.pending:return
         roster={f.owner:f for f in self.app.roster}
         if any(roster.get(f.owner)!=f for f in self.pending):
@@ -147,7 +160,7 @@ class NurseryScene:
             if fish.owner not in self.visited:ready=False
         if ready:
             a,b=self.pending
-            accepted=self.worker.submit('create',a=asdict(a),b=asdict(b),settings=asdict(settings),id=uuid.uuid4().hex)
+            accepted=self.worker.submit('create',a=asdict(a),b=asdict(b),settings=asdict(settings),id=uuid.uuid4().hex,context=self.context)
             if accepted:self.pending=None;self.pending_request=True;self.status='Storing local egg'
         elif self.elapsed>180:
             self.pending=None;self.status='Pair could not reach cave; no egg created'
