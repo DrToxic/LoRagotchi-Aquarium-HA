@@ -19,7 +19,8 @@ def boolean(value, name):
 
 def render_settings(options, theme_directory=None):
     settings = Settings()
-    from .nursery import NurserySettings
+    from .nursery import NurserySettings, hatch_identity
+    hatch_identity(options.get("nursery_hatch_egg", ""))
     settings.nursery=NurserySettings.from_dict(options.get('nursery',{}))
     settings.scene = validate_setting('scene', options.get('scene', 'tidal-garden'))
     settings.fish_lifespan_hours = validate_hours(options.get('fish_lifespan_hours', 0))

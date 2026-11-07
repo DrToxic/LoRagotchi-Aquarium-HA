@@ -24,7 +24,7 @@ def package(output):
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'docs/THEMES.md')
         shutil.copy2(ROOT/'docs/THEMES.md',folder/'THEMES.md')
         shutil.copy2(ROOT/'docs/SCENERY.md',folder/'docs/SCENERY.md')
-        for name in ('LIVING-AQUARIUM.md','CONTROLS.md','HOME_ASSISTANT.md','APPEARANCE.md'):
+        for name in ('LIVING-AQUARIUM.md','CONTROLS.md','HOME_ASSISTANT.md','APPEARANCE.md','ANGLERFISH.md','ANGLERFISH-VERIFICATION.md'):
             shutil.copy2(ROOT/'docs'/name,folder/'docs'/name)
         shutil.copy2(ROOT/'homeassistant/CHANGELOG.md',folder/'CHANGELOG.md')
         (folder/'homeassistant').mkdir()

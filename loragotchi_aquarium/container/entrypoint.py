@@ -127,6 +127,10 @@ def main():
         if not re.fullmatch(r'[A-Za-z0-9.:-]+',cfg['host']): raise ValueError('Set radio_host to the MeshCoMod RX hostname or IP, without URL or credentials')
         app+=['--connect',f'meshcore:{cfg["host"]}:{cfg["port"]}']
         if cfg['control']: app+=['--radio-control']
+    if cfg['ha']:
+        from tank.nursery import hatch_identity
+        egg=hatch_identity(cfg['options'].get('nursery_hatch_egg',''))
+        if egg:app+=['--hatch-local-egg',egg]
     environment_command=None
     if needs_environment:
         environment_file='/run/aquarium/environment.json'

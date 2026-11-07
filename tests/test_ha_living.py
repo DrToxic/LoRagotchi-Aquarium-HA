@@ -41,3 +41,33 @@ def test_game_api_stateless_bounded_and_cross_origin_form_denied(tmp_path):
         with pytest.raises(HTTPError):urlopen(url)
         assert not list(tmp_path.iterdir()) # no game filesystem writes or secret API side effects
     finally:server.shutdown();server.server_close();thread.join()
+
+
+@pytest.mark.parametrize('value',[None,True,'a'*31,'x'*32,'A'*32,'../other'])
+def test_ha_local_hatch_bad_identity_fails_before_startup(value):
+    with pytest.raises(ValueError):render_settings({'nursery_hatch_egg':value})
+
+
+def test_ha_explicit_local_hatch_is_separate_from_automatic_breeding():
+    for ident in ('','a'*32):
+        profile=render_settings({'nursery_hatch_egg':ident})
+        assert not profile.nursery.enabled and not profile.nursery.automatic
+        assert not hasattr(profile.nursery,'hatch')
+
+
+def test_ha_local_hatch_configuration_only_appends_renderer_argument():
+    import ast
+    from pathlib import Path
+    root=Path(__file__).parents[1]
+    entry=(root/'container/entrypoint.py').read_text()
+    tree=ast.parse(entry)
+    branch=next(node for node in ast.walk(tree) if isinstance(node,ast.If) and "hatch_identity" in ast.get_source_segment(entry,node) and "egg=hatch_identity" in ast.get_source_segment(entry,node) and "if cfg['ha']"==ast.get_source_segment(entry,node).splitlines()[0].rstrip(':'))
+    # Compile/run just the real configuration-to-renderer argument branch;
+    # no container services, files, network or radio are opened.
+    code=compile(ast.fix_missing_locations(ast.Module(body=[branch],type_ignores=[])),'entrypoint-hatch','exec')
+    for configured,expected in [('',[]),('a'*32,['--hatch-local-egg','a'*32])]:
+        scope={'cfg':{'ha':True,'options':{'nursery_hatch_egg':configured}},'app':[],'backend_command':['unchanged']}
+        exec(code,scope)
+        assert scope['app']==expected and scope['backend_command']==['unchanged']
+    scope={'cfg':{'ha':False},'app':[]}
+    exec(code,scope);assert scope['app']==[]

@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--managed-settings",action="store_true",help="Display-only HA aquarium: settings supplied by the host, no controls or deadzones")
     parser.add_argument("--database",type=Path)
     parser.add_argument("--session",default="community")
+    from .nursery import hatch_identity
+    parser.add_argument("--hatch-local-egg",type=hatch_identity,default="",help="explicitly consume one stored local egg by full ID; never sends to DX")
     parser.add_argument("--settings",type=Path,default=Path(os.environ.get('XDG_CONFIG_HOME',Path.home()/'.config'))/'loragotchi-tank'/'settings.json')
     parser.add_argument("--environment-file",type=Path,help=argparse.SUPPRESS)
     parser.add_argument("--preset",choices=("compatibility","low","balanced","high","ultra"))

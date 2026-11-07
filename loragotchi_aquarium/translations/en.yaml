@@ -105,9 +105,12 @@ configuration:
   radio_control:
     name: Legacy radio write permission
     description: Retained for existing configurations. No radio configuration UI is exposed by this add-on. Use MeshCore or MeshCore Chat for radio settings.
+  nursery_hatch_egg:
+    name: Local hatch egg ID
+    description: "Optional exact 32-character egg ID from app logs. Save and restart to consume it once into a permanent local Gen 1 fry, lifetime 0. Clear afterwards. Never transfers to DX. Repeated restarts are safe."
   nursery:
     name: Breeding cave and local nursery
-    description: Optional local eggs only. Existing eggs survive disabling or a lower capacity. DX egg transfer is not connected.
+    description: Persistent local eggs and optional permanent local fry. Eggs survive disabling, lower capacity, Demo/Live switches and restarts. DX transfer is not connected.
     fields:
       enabled:
         name: Show breeding cave and nursery
