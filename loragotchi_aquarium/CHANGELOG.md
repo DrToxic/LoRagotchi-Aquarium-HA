@@ -1,3 +1,43 @@
+## 0.3.0-preview.16
+
+- Preserve the owner's already-published Water creature graphics/movement,
+  all-species default demo and LRX-only repeater support while integrating
+  the separately approved nursery, hatch and Anglerfish work.
+- Fix native parent selection; retain adult/elder eligibility, stale-command
+  rejection, collision-safe cave visits and immutable saved egg previews.
+- Add persistent, transactionally migrated local egg/fry collections and an
+  explicit exactly-once hatch into a permanent Gen 1 fry (lifetime 0).
+  HA keeps its viewer read-only and uses Configuration → Local hatch egg ID.
+- Render explicitly received species ID 14 as an original native Anglerfish,
+  with age/style/genetic expression and bounded animated lure; legacy RX
+  snapshots cannot identify species. Preserve all prior species art.
+- Keep replay, visitor storage and radio ownership separate. No DX adoption,
+  firmware update or automatic live deployment is included.
+
+See [nursery and hatch](https://github.com/DrToxic/LoRagotchi-Aquarium-HA/blob/main/docs/LIVING-AQUARIUM.md),
+[Anglerfish](https://github.com/DrToxic/LoRagotchi-Aquarium-HA/blob/main/docs/ANGLERFISH.md) and
+[publication verification](https://github.com/DrToxic/LoRagotchi-Aquarium-HA/blob/main/docs/PUBLICATION-2026-11-07.md).
+
+## 0.3.0-preview.15
+
+- Negotiate Water LFG1 metadata with S1-capable DX senders and persist species,
+  genes, and panel metadata for received animals.
+- Preserve the legacy nine-field COMMIT path and upgrade pending ACKs safely.
+
+## 0.3.0-preview.14
+
+- Add distinct locomotion for shrimp, jet-propelled squid and octopus, pulsing
+  jellyfish, and slow bottom-dwelling lobster, crab, shell-dweller and sea star.
+- Keep crab obstacle avoidance aligned with its sideways scuttle.
+- Make the new release detectable by Home Assistant with an incremented add-on version.
+
+## 0.3.0-preview.13
+
+- Add Water v1 species, gene and panel metadata support with backward-compatible
+  decoding and persistence; render species-specific aquarium models and motion.
+- Preserve species and genetic metadata across repeated or partial updates.
+- Harden nursery parent validation, demo/live isolation and stale worker handling.
+
 ## 0.3.0-preview.12
 
 - Redesign the optional native/source operator with a stable sidebar, grouped

@@ -20,6 +20,9 @@ class Message:
     stage: int = 2
     name: str = 'DX Fish'
     appearance: tuple | None = None
+    species_id: int | None = None
+    genes: tuple | None = None
+    panel: int | None = None
 
 
 def parse(text):
@@ -43,8 +46,21 @@ def parse(text):
         if len(p) != 4: raise ValueError('Invalid RECALL')
         return Message('RECALL', tx, fish)
     if len(p) == 4: return Message('COMMIT', tx, fish)
-    if len(p) != 9 or p[4] not in ('C', 'M'): raise ValueError('Invalid COMMIT')
-    return Message('COMMIT', tx, fish, appearance=(p[4], *(uint(x, 6) for x in p[5:8]), uint(p[8], 65535)))
+    if p[4] not in ('C', 'M') or len(p) not in (9, 13, 17):
+        raise ValueError('Invalid COMMIT')
+    appearance = (p[4], *(uint(x, 6) for x in p[5:8]), uint(p[8], 65535))
+    species_id = genes = panel = None
+    if len(p) == 13:
+        if p[9] != 'P1' or p[11] != 'S1': raise ValueError('Invalid Water metadata')
+        panel, species_id = uint(p[10], 2), uint(p[12], 65535)
+    elif len(p) == 17:
+        if p[9] != 'H1' or p[13] != 'P1' or p[15] != 'S1':
+            raise ValueError('Invalid Water metadata')
+        genes = tuple(uint(x, 247) for x in p[10:13])
+        if any(6 < gene < 8 for gene in genes): raise ValueError('Invalid Water genes')
+        panel, species_id = uint(p[14], 2), uint(p[16], 65535)
+    return Message('COMMIT', tx, fish, appearance=appearance, species_id=species_id,
+                   genes=genes, panel=panel)
 
 
 class Receiver:
@@ -78,6 +94,8 @@ class Receiver:
             if old and old != (entry, self.rx):
                 raise ValueError('Companion identity changed; intake stopped. Restore the original radio or use a separate database.')
             self.db.execute('INSERT OR IGNORE INTO ha_binding VALUES(?,?)', (entry, self.rx))
+            self.db.execute("UPDATE ha_jobs SET payload=payload||'|S1' "
+                            "WHERE op='ACK' AND payload NOT LIKE '%|S1'")
         # Crash/reconnect uncertainty keeps its existing deadline, never immediate replay.
 
     def _one(self, query, args=()):
@@ -87,6 +105,7 @@ class Receiver:
 
     def _job(self, visit, op, suffix='', due=None, replay=False):
         now = self.clock()
+        if op == 'ACK' and not suffix.endswith('|S1'): suffix += '|S1'
         payload = f'LFG1|{op}|{visit["tx"]}|{visit["fish"]}{suffix}'
         self.db.execute('INSERT OR IGNORE INTO ha_jobs(visit,op,payload,due) VALUES(?,?,?,?)',
                         (visit['id'], op, payload, now if due is None else due))
@@ -154,8 +173,15 @@ class Receiver:
             if visit['state'] == 'captured': return 'duplicate'
             # Persist immutable captured appearance and the return job together.
             genes = msg.appearance or ('M', 6, 6, 6, 65535)
+            metadata = {}
+            if msg.species_id is not None:
+                metadata.update(species_id=msg.species_id, species_present=True,
+                                panel=msg.panel, panel_present=True)
+            if msg.genes is not None:
+                metadata.update(body_gene=msg.genes[0], scales_gene=msg.genes[1],
+                                eyes_gene=msg.genes[2], genes_present=True)
             snapshot = Snapshot(self.rx, visit['id'], owner, msg.fish, msg.tx, visit['stage'],
-                                *genes, msg.appearance is not None, visit['name'])
+                                *genes, msg.appearance is not None, visit['name'], **metadata)
             self.store.save_in_transaction(snapshot, now=now)
             self.db.execute("UPDATE ha_visits SET state='captured' WHERE id=?", (visit['id'],))
             self.db.execute("UPDATE ha_jobs SET state='superseded' WHERE visit=? AND op='ACK'", (visit['id'],))

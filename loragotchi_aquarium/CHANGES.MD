@@ -47,6 +47,47 @@ Tidal Garden is now the default scenery, including shaded animated seagrass. Cla
 
 ## Home Assistant release history
 
+## 0.3.0-preview.16
+
+- Preserve the owner's already-published Water creature graphics/movement,
+  all-species default demo and LRX-only repeater support while integrating
+  the separately approved nursery, hatch and Anglerfish work.
+- Fix native parent selection; retain adult/elder eligibility, stale-command
+  rejection, collision-safe cave visits and immutable saved egg previews.
+- Add persistent, transactionally migrated local egg/fry collections and an
+  explicit exactly-once hatch into a permanent Gen 1 fry (lifetime 0).
+  HA keeps its viewer read-only and uses Configuration → Local hatch egg ID.
+- Render explicitly received species ID 14 as an original native Anglerfish,
+  with age/style/genetic expression and bounded animated lure; legacy RX
+  snapshots cannot identify species. Preserve all prior species art.
+- Keep replay, visitor storage and radio ownership separate. No DX adoption,
+  firmware update or automatic live deployment is included.
+
+See [nursery and hatch](docs/LIVING-AQUARIUM.md),
+[Anglerfish](docs/ANGLERFISH.md) and
+[publication verification](docs/PUBLICATION-2026-11-07.md).
+
+## 0.3.0-preview.15
+
+- Negotiate S1 Water metadata for Home Assistant LFG1 visits and preserve
+  received species, optional genes, and panel while retaining legacy COMMITs.
+- Upgrade pending pre-S1 acknowledgements so active reservations use the new
+  metadata capability after an add-on update.
+
+## 0.3.0-preview.14
+
+- Give shrimp, squid, octopus, jellyfish and bottom-dwelling species locomotion
+  suited to their anatomy; crabs scuttle sideways and avoid obstacles along
+  their travel direction.
+- Increment the Supervisor add-on version so Home Assistant can detect updates.
+
+## 0.3.0-preview.13
+
+- Add Water v1 species, gene and panel metadata support with backward-compatible
+  decoding and persistence; render species-specific aquarium models and motion.
+- Preserve species and genetic metadata across repeated or partial updates.
+- Harden nursery parent validation, demo/live isolation and stale worker handling.
+
 ## 0.3.0-preview.12
 
 - Redesign the optional native/source operator with a stable sidebar, grouped

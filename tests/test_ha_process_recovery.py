@@ -43,7 +43,7 @@ def test_backend_process_recovers_capture_without_renderer(tmp_path, hours):
                 renderer.kill();renderer.wait(timeout=3)
                 assert first.poll() is None
                 await ha.incoming(REQ)
-                await until(lambda:any(c.get('service_data',{}).get('message')=='LFG1|ACK|12|34' for c in ha.calls))
+                await until(lambda:any(c.get('service_data',{}).get('message')=='LFG1|ACK|12|34|S1' for c in ha.calls))
                 await ha.incoming(COMMIT)
                 await until(lambda:len(snapshot().get('fish',[]))==1)
                 first.kill();first.wait(timeout=3)  # No graceful flush; capture must already be committed.

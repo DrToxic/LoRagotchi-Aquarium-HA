@@ -33,7 +33,10 @@ def send(r, job, delivered=True):
     'LFG1|REQ|1|2|4|X', 'LFG1|REQ|1|2|2|X|Y', 'LFG1|REQ|1|2|2|\n',
     'LFG1|REQ|1|2|2|'+'x'*24, 'LFG1|COMMIT|1|2|C|7|1|1|0',
     'LFG1|COMMIT|1|2|M|1|1|1|65536', 'LFG1|COMMIT|1|2|C|1',
-    'LFG1|RECALL|1|2|junk', 'LFG1|ACK|1|2', 'LFG1|COMMIT|1|2|Z|1|1|1|0'])
+    'LFG1|RECALL|1|2|junk', 'LFG1|ACK|1|2', 'LFG1|COMMIT|1|2|Z|1|1|1|0',
+    'LFG1|COMMIT|1|2|C|1|2|3|0|H1|7|1|1|P1|1|S1|13',
+    'LFG1|COMMIT|1|2|C|1|2|3|0|P1|3|S1|13',
+    'LFG1|COMMIT|1|2|C|1|2|3|0|P1|1|S1|65536'])
 def test_parser_rejects_malformed(text):
     with pytest.raises(ValueError): parse(text)
 
@@ -41,10 +44,11 @@ def test_capture_and_return_keeps_copy(engine):
     r,s,c=engine
     assert r.ingest(OWNER,REQ)=='reserved'
     assert not s.roster()
-    ack=r.claim(); assert ack['payload']=='LFG1|ACK|12|34';send(r,ack)
+    ack=r.claim(); assert ack['payload']=='LFG1|ACK|12|34|S1';send(r,ack)
     assert r.ingest(OWNER,COMMIT)=='captured'
     saved=s.roster()[0]
     assert (saved.rx,saved.owner,saved.body,saved.scales,saved.eyes,saved.tint)==('ha:'+RX,OWNER,1,2,3,4567)
+    assert saved.species_id==0 and not saved.species_present and not saved.panel_present
     arrived=r.claim();assert arrived['op']=='ARRIVED';send(r,arrived)
     assert not r.claim()
     c.advance(4)
@@ -55,6 +59,32 @@ def test_capture_and_return_keeps_copy(engine):
     assert r.ingest(OWNER,COMMIT)=='duplicate'
     assert s.roster()==[saved]
     c.advance(30); assert r.claim()['op']=='RETURN'
+
+
+@pytest.mark.parametrize(('extension','expected_genes'),[
+    ('|H1|8|88|9|P1|2|S1|13',(8,88,9)),
+    ('|P1|2|S1|13',None),
+])
+def test_negotiated_water_commit_preserves_metadata(engine,extension,expected_genes):
+    r,s,c=engine
+    assert r.ingest(OWNER,REQ)=='reserved'
+    ack=r.claim();assert ack['payload']=='LFG1|ACK|12|34|S1'
+    commit='LFG1|COMMIT|12|34|C|1|2|3|4567'+extension
+    assert r.ingest(OWNER,commit)=='captured'
+    fish=s.roster()[0]
+    assert fish.species_id==13 and fish.species_present
+    assert fish.panel==2 and fish.panel_present
+    assert fish.genes_present is (expected_genes is not None)
+    if expected_genes is not None:
+        assert (fish.body_gene,fish.scales_gene,fish.eyes_gene)==expected_genes
+
+
+def test_upgrade_adds_s1_to_pending_legacy_ack(engine):
+    r,s,c=engine
+    assert r.ingest(OWNER,REQ)=='reserved'
+    s.db.execute("UPDATE ha_jobs SET payload='LFG1|ACK|12|34' WHERE op='ACK'")
+    Receiver(s,'entry',RX,c)
+    assert r.claim()['payload']=='LFG1|ACK|12|34|S1'
 
 def test_storage_failure_never_confirms_or_commits_partial_state(engine):
     r,s,c=engine;r.ingest(OWNER,REQ)

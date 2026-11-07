@@ -127,7 +127,7 @@ def test_wire_flow_early_outcomes_chat_coexistence_and_readonly(tmp_path,monkeyp
                 await asyncio.sleep(.1)
                 assert not store.roster()
                 await ha.incoming(REQ)
-                await until(lambda:any(c.get('service_data',{}).get('message')=='LFG1|ACK|12|34' for c in ha.calls))
+                await until(lambda:any(c.get('service_data',{}).get('message')=='LFG1|ACK|12|34|S1' for c in ha.calls))
                 await ha.incoming(COMMIT)
                 await until(lambda:backend.receiver.summary()['delivered']==1)
                 assert len(store.roster())==1
